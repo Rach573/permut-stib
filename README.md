@@ -34,5 +34,14 @@ npm install
 npm run dev
 ```
 
-La V1 est volontairement un socle : le modèle d'authentification et la séparation 3 couches sont posés avant l'implémentation complète des workflows de permutation et de signature.
+### Comptes de démonstration
 
+En environnement `Development`, une base neuve reçoit automatiquement 50 agents fictifs et un compte délégué.
+
+- délégué : `DELEGUE`
+- agent actif : `70-001` à `70-042`
+- mot de passe commun : `Demo-STIB-2026!`
+
+Les comptes `70-043` à `70-046` sont en attente, `70-047` et `70-048` sont suspendus, et les deux derniers sont refusés. Cette génération est désactivée hors de l'environnement de développement.
+
+La V1 est volontairement un socle : le modèle d'authentification et la séparation 3 couches sont posés avant l'implémentation complète des workflows de permutation et de signature.

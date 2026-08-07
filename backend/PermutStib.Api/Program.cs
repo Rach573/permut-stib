@@ -68,6 +68,7 @@ await using (var scope = app.Services.CreateAsyncScope())
 }
 
 await AdminBootstrapper.SeedAsync(app.Services, app.Configuration);
+await DemoDataSeeder.SeedAsync(app.Services, app.Configuration);
 
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
