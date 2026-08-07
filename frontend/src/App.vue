@@ -36,7 +36,14 @@ async function createSignature() { await execute(async () => { await api.createS
 async function offerSignature(item: Signature) { await execute(async () => { await api.offerSignature(item.id); await loadSignatures() }) }
 async function confirmSigner(item: Signature, offerId: string) { await execute(async () => { await api.confirmSigner(item.id, offerId); await loadSignatures() }) }
 
-onMounted(async () => { try { session.value = await api.me(); view.value = 'home' } catch { /* aucune session */ } })
+onMounted(async () => {
+  if (import.meta.env.DEV && new URLSearchParams(location.search).get('preview') === 'admin') {
+    session.value = { id: 'preview', matricule: 'DÉLÉGUÉ', role: 'Admin' }
+    view.value = 'home'
+    return
+  }
+  try { session.value = await api.me(); view.value = 'home' } catch { /* aucune session */ }
+})
 </script>
 
 <template>
@@ -57,7 +64,15 @@ onMounted(async () => { try { session.value = await api.me(); view.value = 'home
     <section v-else-if="view === 'pending'" class="panel"><h1>Demande envoyée</h1><p>Ton compte attend la validation du délégué.</p><button @click="view = 'login'">Retour</button></section>
 
     <template v-else>
-      <section v-if="view === 'home'" class="panel">
+      <section v-if="view === 'home' && session?.role === 'Admin'" class="admin-dashboard">
+        <div class="admin-heading"><div><span class="eyebrow">ESPACE DÉLÉGUÉ</span><h1>Vue d’ensemble</h1><p>Les éléments qui demandent ton attention.</p></div><button class="icon-button" title="Se déconnecter" @click="logout">↪</button></div>
+        <div class="metric-grid"><article class="metric urgent"><strong>4</strong><span>Inscriptions<br>en attente</span></article><article class="metric"><strong>12</strong><span>Permutations<br>ouvertes</span></article><article class="metric"><strong>7</strong><span>Signatures<br>recherchées</span></article><article class="metric success"><strong>26</strong><span>Opérations<br>confirmées</span></article></div>
+        <article class="admin-card"><div class="card-title"><div><span class="card-icon">👤</span><strong>Inscriptions à valider</strong></div><button class="text-button">Voir les 4</button></div><div class="approval"><div><b>70-445</b><small>0466 ••• •• 63 · aujourd’hui</small></div><div class="inline-actions"><button class="approve">✓</button><button class="reject">×</button></div></div><div class="approval"><div><b>71-208</b><small>0471 ••• •• 18 · hier</small></div><div class="inline-actions"><button class="approve">✓</button><button class="reject">×</button></div></div></article>
+        <article class="admin-card"><div class="card-title"><div><span class="card-icon">↔</span><strong>Activité récente</strong></div><button class="text-button">Tout voir</button></div><div class="activity"><span class="activity-dot locked"></span><div><b>Permutation verrouillée</b><small>70-312 ↔ 72-105 · il y a 18 min</small></div></div><div class="activity"><span class="activity-dot signed"></span><div><b>Signature confirmée</b><small>17 juillet · il y a 42 min</small></div></div><div class="activity"><span class="activity-dot waiting"></span><div><b>Nouvelle proposition</b><small>Vacances août → juillet · il y a 1 h</small></div></div></article>
+        <article class="admin-card"><div class="card-title"><div><span class="card-icon">⚖</span><strong>Entraide</strong></div><button class="text-button">Rapport</button></div><div class="help-row"><b>70-446</b><span><i style="width:78%"></i></span><small>7 données · 2 reçues</small></div><div class="help-row"><b>70-445</b><span><i class="low" style="width:18%"></i></span><small>1 donnée · 8 reçues</small></div><p class="hint">Indicateur informatif uniquement — aucune sanction automatique.</p></article>
+        <nav class="admin-nav"><button><span>⌂</span>Accueil</button><button><span>👥</span>Agents</button><button><span>↔</span>Échanges</button><button><span>☷</span>Audit</button></nav>
+      </section>
+      <section v-else-if="view === 'home'" class="panel">
         <h1>Bonjour {{ session?.matricule }}</h1><p>Que veux-tu faire ?</p>
         <nav class="actions"><button @click="view = 'new-permutation'">Chercher une permutation</button><button @click="loadPermutations">Mes permutations</button><button @click="view = 'new-signature'">Demander une signature</button><button @click="loadSignatures">Signatures recherchées</button></nav>
         <button class="secondary" @click="logout">Se déconnecter</button>
