@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PermutStib.Business.Models;
 using PermutStib.Business.Services;
@@ -11,6 +12,15 @@ namespace PermutStib.Api.Controllers;
 [Route("api/auth")]
 public sealed class AuthController(AccountService accounts) : ControllerBase
 {
+    [Authorize]
+    [HttpGet("me")]
+    public IActionResult Me() => Ok(new
+    {
+        id = User.FindFirstValue(ClaimTypes.NameIdentifier),
+        matricule = User.FindFirstValue("matricule"),
+        role = User.FindFirstValue("app_role")
+    });
+
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterAgentCommand command, CancellationToken cancellationToken)
     {
@@ -59,4 +69,3 @@ public sealed class AuthController(AccountService accounts) : ControllerBase
         return NoContent();
     }
 }
-

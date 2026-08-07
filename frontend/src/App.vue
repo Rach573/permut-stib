@@ -1,96 +1,71 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { api } from './api'
+import { onMounted, ref } from 'vue'
+import { api, type Permutation, type Session, type Signature } from './api'
 
-type View = 'login' | 'register' | 'pending' | 'home'
-
+type View = 'login' | 'register' | 'pending' | 'home' | 'new-permutation' | 'permutations' | 'new-signature' | 'signatures'
 const view = ref<View>('login')
 const busy = ref(false)
 const error = ref('')
+const session = ref<Session | null>(null)
+const identifier = ref(''), loginPassword = ref('')
+const matricule = ref(''), phoneNumber = ref(''), password = ref(''), passwordConfirmation = ref('')
+const ownedFrom = ref(''), ownedTo = ref(''), wantedFrom = ref(''), wantedTo = ref('')
+const signatureDate = ref(''), signatureComment = ref('')
+const myPermutations = ref<Permutation[]>([]), availablePermutations = ref<Permutation[]>([])
+const mySignatures = ref<Signature[]>([]), availableSignatures = ref<Signature[]>([])
 
-const identifier = ref('')
-const loginPassword = ref('')
-
-const matricule = ref('')
-const phoneNumber = ref('')
-const password = ref('')
-const passwordConfirmation = ref('')
-
-async function login() {
-  error.value = ''
-  busy.value = true
-  try {
-    await api.login({ identifier: identifier.value, password: loginPassword.value })
-    view.value = 'home'
-  } catch (exception) {
-    error.value = exception instanceof Error ? exception.message : 'Connexion impossible.'
-  } finally {
-    busy.value = false
-  }
+async function execute(action: () => Promise<void>) {
+  error.value = ''; busy.value = true
+  try { await action() } catch (exception) { error.value = exception instanceof Error ? exception.message : 'Action impossible.' }
+  finally { busy.value = false }
 }
 
+async function login() { await execute(async () => { session.value = await api.login({ identifier: identifier.value, password: loginPassword.value }) as Session; view.value = 'home' }) }
 async function register() {
-  error.value = ''
-  if (password.value !== passwordConfirmation.value) {
-    error.value = 'Les mots de passe ne correspondent pas.'
-    return
-  }
-
-  busy.value = true
-  try {
-    await api.register({ matricule: matricule.value, phoneNumber: phoneNumber.value, password: password.value })
-    view.value = 'pending'
-  } catch (exception) {
-    error.value = exception instanceof Error ? exception.message : 'Inscription impossible.'
-  } finally {
-    busy.value = false
-  }
+  if (password.value !== passwordConfirmation.value) { error.value = 'Les mots de passe ne correspondent pas.'; return }
+  await execute(async () => { await api.register({ matricule: matricule.value, phoneNumber: phoneNumber.value, password: password.value }); view.value = 'pending' })
 }
+async function logout() { await execute(async () => { await api.logout(); session.value = null; view.value = 'login' }) }
+async function loadPermutations() { await execute(async () => { [myPermutations.value, availablePermutations.value] = await Promise.all([api.myPermutations(), api.availablePermutations()]); view.value = 'permutations' }) }
+async function createPermutation() { await execute(async () => { await api.createPermutation({ from: ownedFrom.value, to: ownedTo.value }, { from: wantedFrom.value, to: wantedTo.value }); await loadPermutations() }) }
+async function proposePermutation(item: Permutation) { await execute(async () => { await api.proposePermutation(item.id, item.wantedPeriod); await loadPermutations() }) }
+async function acceptProposal(item: Permutation, proposalId: string) { await execute(async () => { await api.acceptProposal(item.id, proposalId); await loadPermutations() }) }
+async function confirmPermutation(item: Permutation) { await execute(async () => { await api.confirmPermutation(item.id); await loadPermutations() }) }
+async function loadSignatures() { await execute(async () => { [mySignatures.value, availableSignatures.value] = await Promise.all([api.mySignatures(), api.availableSignatures()]); view.value = 'signatures' }) }
+async function createSignature() { await execute(async () => { await api.createSignature(signatureDate.value, signatureComment.value); await loadSignatures() }) }
+async function offerSignature(item: Signature) { await execute(async () => { await api.offerSignature(item.id); await loadSignatures() }) }
+async function confirmSigner(item: Signature, offerId: string) { await execute(async () => { await api.confirmSigner(item.id, offerId); await loadSignatures() }) }
+
+onMounted(async () => { try { session.value = await api.me(); view.value = 'home' } catch { /* aucune session */ } })
 </script>
 
 <template>
   <main class="shell">
-    <header>
-      <span class="mark">↔</span>
-      <div><strong>Permut' STIB</strong><small>Entraide entre agents</small></div>
-    </header>
+    <header><span class="mark">↔</span><div><strong>Permut' STIB</strong><small>Entraide entre agents</small></div></header>
+    <p v-if="error" class="error notice">{{ error }}</p>
 
     <section v-if="view === 'login'" class="panel">
-      <h1>Se connecter</h1>
-      <p>Utilise ton matricule STIB ou ton numéro de GSM.</p>
-      <form @submit.prevent="login">
-        <label>Matricule ou GSM<input v-model="identifier" autocomplete="username" required /></label>
-        <label>Mot de passe<input v-model="loginPassword" type="password" autocomplete="current-password" required /></label>
-        <p v-if="error" class="error">{{ error }}</p>
-        <button :disabled="busy">Se connecter</button>
-      </form>
+      <h1>Se connecter</h1><p>Utilise ton matricule STIB ou ton GSM.</p>
+      <form @submit.prevent="login"><label>Matricule ou GSM<input v-model="identifier" required /></label><label>Mot de passe<input v-model="loginPassword" type="password" required /></label><button :disabled="busy">Se connecter</button></form>
       <button class="secondary" @click="view = 'register'">Créer mon compte</button>
     </section>
-
     <section v-else-if="view === 'register'" class="panel">
-      <h1>Créer mon compte</h1>
-      <p>Le délégué devra valider ton inscription.</p>
-      <form @submit.prevent="register">
-        <label>Matricule STIB<input v-model="matricule" required /></label>
-        <label>GSM<input v-model="phoneNumber" type="tel" autocomplete="tel" required /></label>
-        <label>Mot de passe<input v-model="password" type="password" autocomplete="new-password" required /></label>
-        <label>Confirmer<input v-model="passwordConfirmation" type="password" autocomplete="new-password" required /></label>
-        <p v-if="error" class="error">{{ error }}</p>
-        <button :disabled="busy">Envoyer ma demande</button>
-      </form>
+      <h1>Créer mon compte</h1><p>Le délégué validera ton inscription.</p>
+      <form @submit.prevent="register"><label>Matricule<input v-model="matricule" required /></label><label>GSM<input v-model="phoneNumber" required /></label><label>Mot de passe<input v-model="password" type="password" required /></label><label>Confirmer<input v-model="passwordConfirmation" type="password" required /></label><button :disabled="busy">Envoyer</button></form>
       <button class="secondary" @click="view = 'login'">Retour</button>
     </section>
+    <section v-else-if="view === 'pending'" class="panel"><h1>Demande envoyée</h1><p>Ton compte attend la validation du délégué.</p><button @click="view = 'login'">Retour</button></section>
 
-    <section v-else-if="view === 'pending'" class="panel">
-      <h1>Demande envoyée</h1>
-      <p>Ton compte est en attente de validation par le délégué.</p>
-      <button @click="view = 'login'">Retour à la connexion</button>
-    </section>
-
-    <section v-else class="panel">
-      <h1>Bienvenue</h1>
-      <p>Le socle sécurisé est prêt. Les modules Permutations et Signatures seront branchés ici.</p>
-    </section>
+    <template v-else>
+      <section v-if="view === 'home'" class="panel">
+        <h1>Bonjour {{ session?.matricule }}</h1><p>Que veux-tu faire ?</p>
+        <nav class="actions"><button @click="view = 'new-permutation'">Chercher une permutation</button><button @click="loadPermutations">Mes permutations</button><button @click="view = 'new-signature'">Demander une signature</button><button @click="loadSignatures">Signatures recherchées</button></nav>
+        <button class="secondary" @click="logout">Se déconnecter</button>
+      </section>
+      <section v-else-if="view === 'new-permutation'" class="panel"><h1>Nouvelle permutation</h1><form @submit.prevent="createPermutation"><fieldset><legend>Je possède</legend><label>Du<input v-model="ownedFrom" type="date" required /></label><label>Au<input v-model="ownedTo" type="date" required /></label></fieldset><fieldset><legend>Je recherche</legend><label>Du<input v-model="wantedFrom" type="date" required /></label><label>Au<input v-model="wantedTo" type="date" required /></label></fieldset><button :disabled="busy">Publier</button></form><button class="secondary" @click="view = 'home'">Retour</button></section>
+      <section v-else-if="view === 'permutations'" class="stack"><button class="secondary" @click="view = 'home'">← Accueil</button><article class="panel" v-for="item in myPermutations" :key="item.id"><span class="status">{{ item.status }}</span><h2>Ma demande</h2><p>Je possède {{ item.ownedPeriod.from }} → {{ item.ownedPeriod.to }}<br>Je recherche {{ item.wantedPeriod.from }} → {{ item.wantedPeriod.to }}</p><button v-for="proposal in item.proposals.filter(p => p.status === 'Pending')" :key="proposal.id" @click="acceptProposal(item, proposal.id)">Accepter cette proposition</button><button v-if="item.status === 'Accepted' || item.status === 'Confirmed'" @click="confirmPermutation(item)">Confirmer définitivement</button></article><h2>Demandes disponibles</h2><article class="panel" v-for="item in availablePermutations" :key="item.id"><span class="status">{{ item.status }}</span><p>Recherche {{ item.wantedPeriod.from }} → {{ item.wantedPeriod.to }}</p><button @click="proposePermutation(item)">Proposer cette période</button></article></section>
+      <section v-else-if="view === 'new-signature'" class="panel"><h1>Demander une signature</h1><form @submit.prevent="createSignature"><label>Date<input v-model="signatureDate" type="date" required /></label><label>Commentaire<textarea v-model="signatureComment" maxlength="500" /></label><button :disabled="busy">Publier</button></form><button class="secondary" @click="view = 'home'">Retour</button></section>
+      <section v-else class="stack"><button class="secondary" @click="view = 'home'">← Accueil</button><article class="panel" v-for="item in mySignatures" :key="item.id"><span class="status">{{ item.status }}</span><h2>{{ item.serviceDate }}</h2><p>{{ item.comment }}</p><button v-for="offer in item.offers.filter(o => o.status === 'Pending')" :key="offer.id" @click="confirmSigner(item, offer.id)">Choisir ce signataire</button></article><h2>Demandes disponibles</h2><article class="panel" v-for="item in availableSignatures" :key="item.id"><span class="status">{{ item.status }}</span><h2>{{ item.serviceDate }}</h2><p>{{ item.comment }}</p><button @click="offerSignature(item)">Je peux signer</button></article></section>
+    </template>
   </main>
 </template>
-

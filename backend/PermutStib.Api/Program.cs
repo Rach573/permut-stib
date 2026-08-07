@@ -52,6 +52,10 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddScoped<IAccountGateway, IdentityAccountGateway>();
 builder.Services.AddScoped<AccountService>();
+builder.Services.AddScoped<IPermutationGateway, PermutationGateway>();
+builder.Services.AddScoped<PermutationService>();
+builder.Services.AddScoped<ISignatureGateway, SignatureGateway>();
+builder.Services.AddScoped<SignatureService>();
 
 var app = builder.Build();
 
@@ -59,6 +63,23 @@ await AdminBootstrapper.SeedAsync(app.Services, app.Configuration);
 
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
+
+app.UseExceptionHandler(handler => handler.Run(async context =>
+{
+    var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+    context.Response.ContentType = "application/json";
+    context.Response.StatusCode = exception switch
+    {
+        ArgumentException => StatusCodes.Status400BadRequest,
+        BusinessRuleException => StatusCodes.Status409Conflict,
+        KeyNotFoundException => StatusCodes.Status404NotFound,
+        UnauthorizedAccessException => StatusCodes.Status403Forbidden,
+        DbUpdateConcurrencyException => StatusCodes.Status409Conflict,
+        _ => StatusCodes.Status500InternalServerError
+    };
+    var message = context.Response.StatusCode == 500 ? "Une erreur interne est survenue." : exception?.Message;
+    await context.Response.WriteAsJsonAsync(new { error = message });
+}));
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
