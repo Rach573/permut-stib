@@ -10,3 +10,4 @@ dist/
 !.env.example
 *.user
 *.suo
+.nuget-appdata/
