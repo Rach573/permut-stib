@@ -20,6 +20,7 @@ export type SignatureOffer = { id: string; signerId: string; status: string }
 export type Signature = {
   id: string; requesterId: string; serviceDate: string; comment?: string; status: string; signerId?: string; offers: SignatureOffer[]
 }
+export type AgentNotification = { id: string; type: string; message: string; entityType: string; entityId: string; isRead: boolean; createdAt: string }
 
 async function request<T>(url: string, options: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -58,4 +59,7 @@ export const api = {
   offerSignature: (id: string) => request<Signature>(`/api/signatures/${id}/offers`, { method: 'POST' }),
   confirmSigner: (id: string, offerId: string) => request<Signature>(`/api/signatures/${id}/offers/${offerId}/confirm`, { method: 'POST' }),
   cancelSignature: (id: string) => request<void>(`/api/signatures/${id}/cancel`, { method: 'POST' }),
+  notifications: (unreadOnly = false) => request<AgentNotification[]>(`/api/notifications?unreadOnly=${unreadOnly}`, { method: 'GET' }),
+  markNotificationRead: (id: string) => request<void>(`/api/notifications/${id}/read`, { method: 'POST' }),
+  markAllNotificationsRead: () => request<void>('/api/notifications/read-all', { method: 'POST' }),
 }

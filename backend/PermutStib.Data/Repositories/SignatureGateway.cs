@@ -41,6 +41,7 @@ public sealed class SignatureGateway(PermutStibDbContext db) : ISignatureGateway
         var offer = new SignatureOfferRecord { Id = Guid.NewGuid(), RequestId = request.Id, Request = request, SignerId = signerId };
         request.Offers.Add(offer);
         request.Status = SignatureStatus.ProposalReceived;
+        Notify(request.RequesterId, NotificationType.SignatureOfferReceived, "Un agent se propose pour signer à votre place.", request.Id);
         Audit(request.Id, "SignerOffered", signerId, request.RequesterId, null, offer);
         await db.SaveChangesAsync(cancellationToken);
         return Map(request);
@@ -62,6 +63,7 @@ public sealed class SignatureGateway(PermutStibDbContext db) : ISignatureGateway
         request.SignerId = offer.SignerId;
         request.Status = SignatureStatus.Locked;
         request.LockedAt = DateTimeOffset.UtcNow;
+        Notify(offer.SignerId, NotificationType.SignatureOfferAccepted, "Vous avez été choisi comme signataire. L'engagement est désormais verrouillé.", request.Id);
         Audit(request.Id, "Locked", requesterId, offer.SignerId, null, new { request.SignerId, request.LockedAt });
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -99,5 +101,9 @@ public sealed class SignatureGateway(PermutStibDbContext db) : ISignatureGateway
     {
         EntityType = "Signature", EntityId = id.ToString(), Action = action, ActorId = actorId, SubjectUserId = subjectId,
         BeforeJson = before is null ? null : JsonSerializer.Serialize(before), AfterJson = after is null ? null : JsonSerializer.Serialize(after)
+    });
+    private void Notify(Guid recipientId, NotificationType type, string message, Guid entityId) => db.Notifications.Add(new NotificationRecord
+    {
+        Id = Guid.NewGuid(), RecipientId = recipientId, Type = type, Message = message, EntityType = "Signature", EntityId = entityId
     });
 }

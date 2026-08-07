@@ -56,8 +56,16 @@ builder.Services.AddScoped<IPermutationGateway, PermutationGateway>();
 builder.Services.AddScoped<PermutationService>();
 builder.Services.AddScoped<ISignatureGateway, SignatureGateway>();
 builder.Services.AddScoped<SignatureService>();
+builder.Services.AddScoped<INotificationGateway, NotificationGateway>();
+builder.Services.AddScoped<NotificationService>();
 
 var app = builder.Build();
+
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    var database = scope.ServiceProvider.GetRequiredService<PermutStibDbContext>();
+    await database.Database.EnsureCreatedAsync();
+}
 
 await AdminBootstrapper.SeedAsync(app.Services, app.Configuration);
 

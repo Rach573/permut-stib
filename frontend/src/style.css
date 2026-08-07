@@ -69,3 +69,14 @@ legend { padding: 0 6px; font-weight: 700; }
 .admin-nav { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); width: min(100%, 560px); display: grid; grid-template-columns: repeat(4,1fr); padding: 8px 10px 14px; background: white; border-top: 1px solid #dbe2ea; }
 .admin-nav button { display: grid; gap: 3px; place-items: center; padding: 4px; background: transparent; color: #64748b; font-size: .68rem; }
 .admin-nav button:first-child { color: #172033; }.admin-nav button span { font-size: 1.15rem; }
+.home-title, .notifications-title { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+.home-title p { margin-top: 4px; }
+.notification-button { position: relative; width: 46px; flex: 0 0 auto; padding: 10px; background: #eef2f7; color: #172033; }
+.notification-button b { position: absolute; right: -5px; top: -7px; min-width: 20px; padding: 3px; border-radius: 99px; background: #b42318; color: white; font-size: .68rem; }
+.notifications { margin: 10px 0 18px; padding: 12px; border-radius: 12px; background: #f8fafc; }
+.notifications-title { align-items: center; margin-bottom: 5px; }
+.notifications article { display: flex; gap: 9px; padding: 10px 0; border-top: 1px solid #e8edf3; }
+.notifications article > span { width: 8px; height: 8px; margin-top: 7px; border-radius: 50%; background: transparent; flex: 0 0 auto; }
+.notifications article.unread > span { background: #315b9b; }
+.notifications article p { margin: 0; color: #334155; font-size: .86rem; }
+.notifications article small { display: block; margin-top: 3px; color: #64748b; }

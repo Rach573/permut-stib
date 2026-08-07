@@ -13,6 +13,7 @@ public sealed class PermutStibDbContext(DbContextOptions<PermutStibDbContext> op
     public DbSet<SignatureRecord> Signatures => Set<SignatureRecord>();
     public DbSet<SignatureOfferRecord> SignatureOffers => Set<SignatureOfferRecord>();
     public DbSet<AuditRecord> AuditLog => Set<AuditRecord>();
+    public DbSet<NotificationRecord> Notifications => Set<NotificationRecord>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -65,6 +66,15 @@ public sealed class PermutStibDbContext(DbContextOptions<PermutStibDbContext> op
             entity.Property(x => x.EntityId).HasMaxLength(64);
             entity.Property(x => x.Action).HasMaxLength(64);
             entity.HasIndex(x => new { x.EntityType, x.EntityId, x.CreatedAt });
+        });
+
+        builder.Entity<NotificationRecord>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Type).HasConversion<string>().HasMaxLength(64);
+            entity.Property(x => x.Message).HasMaxLength(300);
+            entity.Property(x => x.EntityType).HasMaxLength(64);
+            entity.HasIndex(x => new { x.RecipientId, x.IsRead, x.CreatedAt });
         });
     }
 

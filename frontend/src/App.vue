@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { api, type Permutation, type Session, type Signature } from './api'
+import { api, type AgentNotification, type Permutation, type Session, type Signature } from './api'
 
 type View = 'login' | 'register' | 'pending' | 'home' | 'new-permutation' | 'permutations' | 'new-signature' | 'signatures'
 const view = ref<View>('login')
@@ -13,6 +13,7 @@ const ownedFrom = ref(''), ownedTo = ref(''), wantedFrom = ref(''), wantedTo = r
 const signatureDate = ref(''), signatureComment = ref('')
 const myPermutations = ref<Permutation[]>([]), availablePermutations = ref<Permutation[]>([])
 const mySignatures = ref<Signature[]>([]), availableSignatures = ref<Signature[]>([])
+const notifications = ref<AgentNotification[]>([])
 
 async function execute(action: () => Promise<void>) {
   error.value = ''; busy.value = true
@@ -35,6 +36,8 @@ async function loadSignatures() { await execute(async () => { [mySignatures.valu
 async function createSignature() { await execute(async () => { await api.createSignature(signatureDate.value, signatureComment.value); await loadSignatures() }) }
 async function offerSignature(item: Signature) { await execute(async () => { await api.offerSignature(item.id); await loadSignatures() }) }
 async function confirmSigner(item: Signature, offerId: string) { await execute(async () => { await api.confirmSigner(item.id, offerId); await loadSignatures() }) }
+async function loadNotifications() { await execute(async () => { notifications.value = await api.notifications() }) }
+async function markAllRead() { await execute(async () => { await api.markAllNotificationsRead(); await loadNotifications() }) }
 
 onMounted(async () => {
   if (import.meta.env.DEV && new URLSearchParams(location.search).get('preview') === 'admin') {
@@ -42,7 +45,7 @@ onMounted(async () => {
     view.value = 'home'
     return
   }
-  try { session.value = await api.me(); view.value = 'home' } catch { /* aucune session */ }
+  try { session.value = await api.me(); view.value = 'home'; notifications.value = await api.notifications() } catch { /* aucune session */ }
 })
 </script>
 
@@ -73,7 +76,8 @@ onMounted(async () => {
         <nav class="admin-nav"><button><span>⌂</span>Accueil</button><button><span>👥</span>Agents</button><button><span>↔</span>Échanges</button><button><span>☷</span>Audit</button></nav>
       </section>
       <section v-else-if="view === 'home'" class="panel">
-        <h1>Bonjour {{ session?.matricule }}</h1><p>Que veux-tu faire ?</p>
+        <div class="home-title"><div><h1>Bonjour {{ session?.matricule }}</h1><p>Que veux-tu faire ?</p></div><button class="notification-button" @click="loadNotifications">🔔<b v-if="notifications.some(n => !n.isRead)">{{ notifications.filter(n => !n.isRead).length }}</b></button></div>
+        <div v-if="notifications.length" class="notifications"><div class="notifications-title"><strong>Notifications</strong><button class="text-button" @click="markAllRead">Tout marquer comme lu</button></div><article v-for="notification in notifications.slice(0, 5)" :key="notification.id" :class="{ unread: !notification.isRead }"><span></span><p>{{ notification.message }}<small>{{ new Date(notification.createdAt).toLocaleString('fr-BE') }}</small></p></article></div>
         <nav class="actions"><button @click="view = 'new-permutation'">Chercher une permutation</button><button @click="loadPermutations">Mes permutations</button><button @click="view = 'new-signature'">Demander une signature</button><button @click="loadSignatures">Signatures recherchées</button></nav>
         <button class="secondary" @click="logout">Se déconnecter</button>
       </section>
