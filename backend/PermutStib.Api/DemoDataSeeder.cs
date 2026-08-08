@@ -26,7 +26,8 @@ public static class DemoDataSeeder
         }
 
         var now = DateTimeOffset.UtcNow;
-        var admin = await CreateUserAsync(users, "DELEGUE", "+32479000000", AgentStatus.Active, AgentRole.Admin);
+        var admin = await users.Users.SingleOrDefaultAsync(x => x.Matricule == "DELEGUE")
+            ?? await CreateUserAsync(users, "DELEGUE", "+32479000000", AgentStatus.Active, AgentRole.Admin);
         var agents = new List<AgentUser>();
         for (var index = 1; index <= 50; index++)
         {
