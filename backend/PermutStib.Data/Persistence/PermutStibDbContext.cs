@@ -12,6 +12,7 @@ public sealed class PermutStibDbContext(DbContextOptions<PermutStibDbContext> op
     public DbSet<PermutationProposalRecord> PermutationProposals => Set<PermutationProposalRecord>();
     public DbSet<SignatureRecord> Signatures => Set<SignatureRecord>();
     public DbSet<SignatureOfferRecord> SignatureOffers => Set<SignatureOfferRecord>();
+    public DbSet<SignatureAvailabilityRecord> SignatureAvailabilities => Set<SignatureAvailabilityRecord>();
     public DbSet<AuditRecord> AuditLog => Set<AuditRecord>();
     public DbSet<NotificationRecord> Notifications => Set<NotificationRecord>();
 
@@ -56,6 +57,14 @@ public sealed class PermutStibDbContext(DbContextOptions<PermutStibDbContext> op
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
             entity.HasIndex(x => new { x.RequestId, x.SignerId }).IsUnique();
+        });
+
+        builder.Entity<SignatureAvailabilityRecord>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Comment).HasMaxLength(200);
+            entity.HasIndex(x => new { x.AgentId, x.ServiceDate }).IsUnique();
+            entity.HasIndex(x => new { x.ServiceDate, x.IsActive });
         });
 
         builder.Entity<AuditRecord>(entity =>

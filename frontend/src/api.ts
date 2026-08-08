@@ -16,9 +16,12 @@ export type Permutation = {
   id: string; requesterId: string; ownedPeriod: DatePeriod; wantedPeriod: DatePeriod; status: string
   acceptedProposalId?: string; requesterConfirmed: boolean; partnerConfirmed: boolean; proposals: PermutationProposal[]
 }
-export type SignatureOffer = { id: string; signerId: string; status: string }
+export type SignatureOffer = { id: string; signerId: string; availabilityId?: string; status: string }
 export type Signature = {
   id: string; requesterId: string; serviceDate: string; comment?: string; status: string; signerId?: string; offers: SignatureOffer[]
+}
+export type SignatureAvailability = {
+  id: string; agentId: string; serviceDate: string; comment?: string; isActive: boolean; createdAt: string
 }
 export type AgentNotification = { id: string; type: string; message: string; entityType: string; entityId: string; isRead: boolean; createdAt: string }
 export type AdminSummary = { pendingAgents: number; activeAgents: number; suspendedAgents: number; openPermutations: number; confirmedPermutations: number; openSignatures: number; confirmedSignatures: number; auditEvents: number }
@@ -66,6 +69,9 @@ export const api = {
   offerSignature: (id: string) => request<Signature>(`/api/signatures/${id}/offers`, { method: 'POST' }),
   confirmSigner: (id: string, offerId: string) => request<Signature>(`/api/signatures/${id}/offers/${offerId}/confirm`, { method: 'POST' }),
   cancelSignature: (id: string) => request<void>(`/api/signatures/${id}/cancel`, { method: 'POST' }),
+  mySignatureAvailabilities: () => request<SignatureAvailability[]>('/api/signatures/availabilities/mine', { method: 'GET' }),
+  createSignatureAvailability: (serviceDate: string, comment: string) => request<SignatureAvailability>('/api/signatures/availabilities', { method: 'POST', body: JSON.stringify({ serviceDate, comment: comment || null }) }),
+  cancelSignatureAvailability: (id: string) => request<void>(`/api/signatures/availabilities/${id}/cancel`, { method: 'POST' }),
   notifications: (unreadOnly = false) => request<AgentNotification[]>(`/api/notifications?unreadOnly=${unreadOnly}`, { method: 'GET' }),
   markNotificationRead: (id: string) => request<void>(`/api/notifications/${id}/read`, { method: 'POST' }),
   markAllNotificationsRead: () => request<void>('/api/notifications/read-all', { method: 'POST' }),

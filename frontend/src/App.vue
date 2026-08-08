@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { api, type AdminAgent, type AdminAuditEntry, type AdminPermutation, type AdminSignature, type AdminSummary, type AgentNotification, type HelpStatistics, type Permutation, type Session, type Signature } from './api'
+import { api, type AdminAgent, type AdminAuditEntry, type AdminPermutation, type AdminSignature, type AdminSummary, type AgentNotification, type HelpStatistics, type Permutation, type Session, type Signature, type SignatureAvailability } from './api'
 
-type View = 'login' | 'register' | 'pending' | 'home' | 'new-permutation' | 'permutations' | 'new-signature' | 'signatures'
+type View = 'login' | 'register' | 'pending' | 'home' | 'new-permutation' | 'permutations' | 'new-signature' | 'signatures' | 'available-signatures' | 'signature-availabilities'
 const view = ref<View>('login')
 const busy = ref(false)
 const error = ref('')
@@ -11,8 +11,10 @@ const identifier = ref(''), loginPassword = ref('')
 const matricule = ref(''), phoneNumber = ref(''), password = ref(''), passwordConfirmation = ref('')
 const ownedFrom = ref(''), ownedTo = ref(''), wantedFrom = ref(''), wantedTo = ref('')
 const signatureDate = ref(''), signatureComment = ref('')
+const availabilityDate = ref(''), availabilityComment = ref('')
 const myPermutations = ref<Permutation[]>([]), availablePermutations = ref<Permutation[]>([])
 const mySignatures = ref<Signature[]>([]), availableSignatures = ref<Signature[]>([])
+const mySignatureAvailabilities = ref<SignatureAvailability[]>([])
 const notifications = ref<AgentNotification[]>([])
 const adminSummary = ref<AdminSummary | null>(null)
 const adminAgents = ref<AdminAgent[]>([])
@@ -50,11 +52,15 @@ async function proposePermutation(item: Permutation) { await execute(async () =>
 async function acceptProposal(item: Permutation, proposalId: string) { await execute(async () => { await api.acceptProposal(item.id, proposalId); await loadPermutations() }) }
 async function confirmPermutation(item: Permutation) { await execute(async () => { await api.confirmPermutation(item.id); await loadPermutations() }) }
 async function cancelPermutation(item: Permutation) { await execute(async () => { await api.cancelPermutation(item.id); await loadPermutations() }) }
-async function loadSignatures() { await execute(async () => { [mySignatures.value, availableSignatures.value] = await Promise.all([api.mySignatures(), api.availableSignatures()]); view.value = 'signatures' }) }
-async function createSignature() { await execute(async () => { await api.createSignature(signatureDate.value, signatureComment.value); await loadSignatures() }) }
-async function offerSignature(item: Signature) { await execute(async () => { await api.offerSignature(item.id); await loadSignatures() }) }
-async function confirmSigner(item: Signature, offerId: string) { await execute(async () => { await api.confirmSigner(item.id, offerId); await loadSignatures() }) }
-async function cancelSignature(item: Signature) { await execute(async () => { await api.cancelSignature(item.id); await loadSignatures() }) }
+async function loadMySignatures() { await execute(async () => { mySignatures.value = await api.mySignatures(); view.value = 'signatures' }) }
+async function loadAvailableSignatures() { await execute(async () => { availableSignatures.value = await api.availableSignatures(); view.value = 'available-signatures' }) }
+async function createSignature() { await execute(async () => { await api.createSignature(signatureDate.value, signatureComment.value); signatureDate.value = ''; signatureComment.value = ''; mySignatures.value = await api.mySignatures(); view.value = 'signatures' }) }
+async function offerSignature(item: Signature) { await execute(async () => { await api.offerSignature(item.id); availableSignatures.value = await api.availableSignatures() }) }
+async function confirmSigner(item: Signature, offerId: string) { await execute(async () => { await api.confirmSigner(item.id, offerId); mySignatures.value = await api.mySignatures() }) }
+async function cancelSignature(item: Signature) { await execute(async () => { await api.cancelSignature(item.id); mySignatures.value = await api.mySignatures() }) }
+async function loadSignatureAvailabilities() { await execute(async () => { mySignatureAvailabilities.value = await api.mySignatureAvailabilities(); view.value = 'signature-availabilities' }) }
+async function createSignatureAvailability() { await execute(async () => { await api.createSignatureAvailability(availabilityDate.value, availabilityComment.value); availabilityDate.value = ''; availabilityComment.value = ''; await loadSignatureAvailabilities() }) }
+async function cancelSignatureAvailability(item: SignatureAvailability) { await execute(async () => { await api.cancelSignatureAvailability(item.id); await loadSignatureAvailabilities() }) }
 async function loadNotifications() { await execute(async () => { notifications.value = await api.notifications() }) }
 async function markAllRead() { await execute(async () => { await api.markAllNotificationsRead(); await loadNotifications() }) }
 
@@ -155,13 +161,28 @@ onBeforeUnmount(() => {
       <section v-else-if="view === 'home'" class="panel">
         <div class="home-title"><div><h1>Bonjour {{ session?.matricule }}</h1><p>Que veux-tu faire ?</p></div><button class="notification-button" @click="loadNotifications">🔔<b v-if="notifications.some(n => !n.isRead)">{{ notifications.filter(n => !n.isRead).length }}</b></button></div>
         <div v-if="notifications.length" class="notifications"><div class="notifications-title"><strong>Notifications</strong><button class="text-button" @click="markAllRead">Tout marquer comme lu</button></div><article v-for="notification in notifications.slice(0, 5)" :key="notification.id" :class="{ unread: !notification.isRead }"><span></span><p>{{ notification.message }}<small>{{ new Date(notification.createdAt).toLocaleString('fr-BE') }}</small></p></article></div>
-        <nav class="actions"><button @click="view = 'new-permutation'">Chercher une permutation</button><button @click="loadPermutations">Mes permutations</button><button @click="view = 'new-signature'">Demander une signature</button><button @click="loadSignatures">Signatures recherchées</button></nav>
+        <nav class="actions"><button @click="view = 'new-permutation'">Chercher une permutation</button><button @click="loadPermutations">Mes permutations</button><button @click="view = 'new-signature'">Demander une signature</button><button @click="loadMySignatures">Mes signatures</button><button @click="loadAvailableSignatures">Signatures recherchées</button><button @click="loadSignatureAvailabilities">Proposer mes jours disponibles</button></nav>
         <button class="secondary" @click="logout">Se déconnecter</button>
       </section>
       <section v-else-if="view === 'new-permutation'" class="panel"><h1>Nouvelle permutation</h1><form @submit.prevent="createPermutation"><fieldset><legend>Je possède</legend><label>Du<input v-model="ownedFrom" type="date" required /></label><label>Au<input v-model="ownedTo" type="date" required /></label></fieldset><fieldset><legend>Je recherche</legend><label>Du<input v-model="wantedFrom" type="date" required /></label><label>Au<input v-model="wantedTo" type="date" required /></label></fieldset><button :disabled="busy">Publier</button></form><button class="secondary" @click="view = 'home'">Retour</button></section>
       <section v-else-if="view === 'permutations'" class="stack"><button class="secondary" @click="view = 'home'">← Accueil</button><article class="panel" v-for="item in myPermutations" :key="item.id"><span class="status">{{ item.status }}</span><h2>{{ item.requesterId === session?.id ? 'Ma demande' : 'Permutation proposée' }}</h2><p>Possédée {{ item.ownedPeriod.from }} → {{ item.ownedPeriod.to }}<br>Recherchée {{ item.wantedPeriod.from }} → {{ item.wantedPeriod.to }}</p><button v-for="proposal in item.proposals.filter(p => p.status === 'Pending' && item.requesterId === session?.id)" :key="proposal.id" @click="acceptProposal(item, proposal.id)">Accepter cette proposition</button><button v-if="item.status === 'Accepted' || item.status === 'Confirmed'" @click="confirmPermutation(item)">Confirmer définitivement</button><button v-if="item.requesterId === session?.id && !['Confirmed', 'Locked', 'Cancelled'].includes(item.status)" class="danger" @click="cancelPermutation(item)">Annuler ma demande</button></article><h2>Demandes disponibles</h2><article class="panel" v-for="item in availablePermutations" :key="item.id"><span class="status">{{ item.status }}</span><p>Recherche {{ item.wantedPeriod.from }} → {{ item.wantedPeriod.to }}</p><button @click="proposePermutation(item)">Proposer cette période</button></article></section>
       <section v-else-if="view === 'new-signature'" class="panel"><h1>Demander une signature</h1><form @submit.prevent="createSignature"><label>Date<input v-model="signatureDate" type="date" required /></label><label>Commentaire<textarea v-model="signatureComment" maxlength="500" /></label><button :disabled="busy">Publier</button></form><button class="secondary" @click="view = 'home'">Retour</button></section>
-      <section v-else class="stack"><button class="secondary" @click="view = 'home'">← Accueil</button><article class="panel" v-for="item in mySignatures" :key="item.id"><span class="status">{{ item.status }}</span><h2>{{ item.serviceDate }}</h2><p>{{ item.comment }}</p><button v-for="offer in item.offers.filter(o => o.status === 'Pending' && item.requesterId === session?.id)" :key="offer.id" @click="confirmSigner(item, offer.id)">Choisir ce signataire</button><button v-if="item.requesterId === session?.id && !['Locked', 'Cancelled'].includes(item.status)" class="danger" @click="cancelSignature(item)">Annuler ma demande</button></article><h2>Demandes disponibles</h2><article class="panel" v-for="item in availableSignatures" :key="item.id"><span class="status">{{ item.status }}</span><h2>{{ item.serviceDate }}</h2><p>{{ item.comment }}</p><button @click="offerSignature(item)">Je peux signer</button></article></section>
+      <section v-else-if="view === 'signatures'" class="stack">
+        <button class="secondary" @click="view = 'home'">← Accueil</button><h1>Mes signatures</h1>
+        <p v-if="!mySignatures.length" class="hint">Tu n'as aucune demande de signature en cours.</p>
+        <article class="panel" v-for="item in mySignatures" :key="item.id"><span class="status">{{ item.status }}</span><h2>{{ item.serviceDate }}</h2><p>{{ item.comment || 'Sans commentaire' }}</p><p v-if="item.offers.some(o => o.status === 'Pending' && o.availabilityId)" class="match-badge">Un collègue disponible ce jour a été trouvé automatiquement.</p><button v-for="offer in item.offers.filter(o => o.status === 'Pending' && item.requesterId === session?.id)" :key="offer.id" @click="confirmSigner(item, offer.id)">{{ offer.availabilityId ? 'Choisir ce collègue disponible' : 'Choisir ce signataire' }}</button><button v-if="item.requesterId === session?.id && !['Locked', 'Cancelled'].includes(item.status)" class="danger" @click="cancelSignature(item)">Annuler ma demande</button></article>
+      </section>
+      <section v-else-if="view === 'available-signatures'" class="stack">
+        <button class="secondary" @click="view = 'home'">← Accueil</button><h1>Signatures recherchées</h1>
+        <p v-if="!availableSignatures.length" class="hint">Aucun collègue ne recherche actuellement une signature que tu peux proposer.</p>
+        <article class="panel" v-for="item in availableSignatures" :key="item.id"><span class="status">{{ item.status }}</span><h2>{{ item.serviceDate }}</h2><p>{{ item.comment || 'Sans commentaire' }}</p><button @click="offerSignature(item)">Je peux signer</button></article>
+      </section>
+      <section v-else class="stack">
+        <button class="secondary" @click="view = 'home'">← Accueil</button>
+        <article class="panel"><h1>Mes jours disponibles</h1><p>Propose à l'avance les jours où tu peux signer. Dès qu'un collègue demande une signature à la même date, vous êtes tous les deux avertis automatiquement.</p><form @submit.prevent="createSignatureAvailability"><label>Jour disponible<input v-model="availabilityDate" type="date" required /></label><label>Commentaire facultatif<textarea v-model="availabilityComment" maxlength="200" placeholder="Ex. Disponible en matinée" /></label><button :disabled="busy">Proposer ce jour</button></form></article>
+        <h2>Mes propositions</h2><p v-if="!mySignatureAvailabilities.length" class="hint">Tu n'as encore proposé aucun jour.</p>
+        <article class="panel availability-card" v-for="item in mySignatureAvailabilities" :key="item.id"><span class="status" :class="{ inactive: !item.isActive }">{{ item.isActive ? 'Disponible' : 'Utilisée ou annulée' }}</span><h2>{{ item.serviceDate }}</h2><p>{{ item.comment || 'Sans commentaire' }}</p><button v-if="item.isActive" class="danger" @click="cancelSignatureAvailability(item)">Retirer cette disponibilité</button></article>
+      </section>
     </template>
   </main>
 </template>

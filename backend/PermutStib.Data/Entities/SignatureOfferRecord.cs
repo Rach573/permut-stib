@@ -8,6 +8,7 @@ public sealed class SignatureOfferRecord
     public Guid RequestId { get; set; }
     public required SignatureRecord Request { get; set; }
     public Guid SignerId { get; set; }
+    public Guid? AvailabilityId { get; set; }
     public SignatureOfferStatus Status { get; set; } = SignatureOfferStatus.Pending;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

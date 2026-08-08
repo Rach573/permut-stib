@@ -7,7 +7,9 @@ public enum NotificationType
     PermutationConfirmed,
     PermutationLocked,
     SignatureOfferReceived,
-    SignatureOfferAccepted
+    SignatureOfferAccepted,
+    SignatureAvailabilityMatched,
+    SignatureRequestMatched
 }
 
 public sealed record AgentNotification(
@@ -18,4 +20,3 @@ public sealed record AgentNotification(
     Guid EntityId,
     bool IsRead,
     DateTimeOffset CreatedAt);
-

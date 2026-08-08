@@ -14,6 +14,15 @@ public static class SignatureRules
         return command with { Comment = command.Comment?.Trim() };
     }
 
+    public static CreateSignatureAvailabilityCommand ValidateAvailability(CreateSignatureAvailabilityCommand command, DateOnly today)
+    {
+        if (command.ServiceDate < today)
+            throw new ArgumentException("La date de disponibilité ne peut pas être dans le passé.");
+        if (command.Comment?.Length > 200)
+            throw new ArgumentException("Le commentaire ne peut pas dépasser 200 caractères.");
+        return command with { Comment = command.Comment?.Trim() };
+    }
+
     public static void EnsureNoDuplicate(bool duplicate)
     {
         if (duplicate)
@@ -36,7 +45,7 @@ public static class SignatureRules
             throw new UnauthorizedAccessException("Seul le demandeur peut confirmer un signataire.");
         if (request.Status != SignatureStatus.ProposalReceived)
             throw new BusinessRuleException("Aucun signataire ne peut être confirmé.");
-        return request.Offers.SingleOrDefault(x => x.Id == offerId)
+        return request.Offers.SingleOrDefault(x => x.Id == offerId && x.Status == SignatureOfferStatus.Pending)
             ?? throw new KeyNotFoundException("Proposition de signature introuvable.");
     }
 

@@ -21,6 +21,7 @@ public static class DemoDataSeeder
         if (await users.Users.AnyAsync(x => x.Matricule == "70-001"))
         {
             await ResetDemoPasswordsAsync(users);
+            await EnsureDemoSignatureAvailabilitiesAsync(db);
             await PrintCountsAsync(db);
             return;
         }
@@ -109,6 +110,7 @@ public static class DemoDataSeeder
                 CreatedAt = now.AddMinutes(-int.Parse(agent.Matricule[^1].ToString()))
             });
 
+        await EnsureDemoSignatureAvailabilitiesAsync(db);
         await db.SaveChangesAsync();
         await PrintCountsAsync(db);
     }
@@ -142,6 +144,28 @@ public static class DemoDataSeeder
         }
     }
 
+    private static async Task EnsureDemoSignatureAvailabilitiesAsync(PermutStibDbContext db)
+    {
+        var demoAgents = await db.Users
+            .Where(x => x.Status == AgentStatus.Active && x.Matricule.StartsWith("70-"))
+            .OrderBy(x => x.Matricule)
+            .Take(6)
+            .ToListAsync();
+        var serviceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(20));
+
+        foreach (var agent in demoAgents)
+        {
+            if (await db.SignatureAvailabilities.AnyAsync(x => x.AgentId == agent.Id && x.ServiceDate == serviceDate)) continue;
+            db.SignatureAvailabilities.Add(new SignatureAvailabilityRecord
+            {
+                Id = Guid.NewGuid(), AgentId = agent.Id, ServiceDate = serviceDate,
+                Comment = "Disponible pour aider un collègue — démonstration", IsActive = true
+            });
+        }
+
+        await db.SaveChangesAsync();
+    }
+
     private static void AddAudit(PermutStibDbContext db, string type, Guid entityId, string action, Guid actorId, Guid subjectId, object data) =>
         db.AuditLog.Add(new AuditRecord { EntityType = type, EntityId = entityId.ToString(), Action = action, ActorId = actorId,
             SubjectUserId = subjectId, AfterJson = JsonSerializer.Serialize(data) });
@@ -155,6 +179,7 @@ public static class DemoDataSeeder
             Admins = await db.Users.CountAsync(x => x.AppRole == AgentRole.Admin),
             Permutations = await db.Permutations.CountAsync(),
             Signatures = await db.Signatures.CountAsync(),
+            SignatureAvailabilities = await db.SignatureAvailabilities.CountAsync(),
             Notifications = await db.Notifications.CountAsync(),
             AuditRecords = await db.AuditLog.CountAsync()
         }));

@@ -101,3 +101,6 @@ legend { padding: 0 6px; font-weight: 700; }
 .notifications article.unread > span { background: #315b9b; }
 .notifications article p { margin: 0; color: #334155; font-size: .86rem; }
 .notifications article small { display: block; margin-top: 3px; color: #64748b; }
+.match-badge { padding: 10px 12px; border-radius: 10px; background: #eaf7f1; color: #07634f; font-size: .88rem; font-weight: 700; }
+.status.inactive { background: #eef2f7; color: #64748b; }
+.availability-card { border-left: 4px solid #087961; }

@@ -143,21 +143,39 @@ Assert-True (@($notificationsB.Data).type -contains "PermutationProposalAccepted
 Assert-True (@($notificationsB.Data).type -contains "PermutationLocked") "Le partenaire est notifié du verrouillage"
 
 $signatureDate = $start.AddDays(75).ToString("yyyy-MM-dd")
+$availability = Invoke-Api $agentB POST "/api/signatures/availabilities" @{ serviceDate = $signatureDate; comment = "Disponible pour aider" }
+Assert-True ($availability.Data.isActive -eq $true -and $availability.Data.serviceDate -eq $signatureDate) "Un agent peut proposer un jour de signature à l'avance"
+$myAvailabilities = Invoke-Api $agentB GET "/api/signatures/availabilities/mine"
+Assert-True (@($myAvailabilities.Data).id -contains $availability.Data.id) "Le jour proposé apparaît dans ses disponibilités"
 $signature = Invoke-Api $agentA POST "/api/signatures" @{ serviceDate = $signatureDate; comment = "Test complet alpha" }
-Assert-True ($signature.Data.status -eq "Open") "Une demande de signature est créée ouverte"
+Assert-True ($signature.Data.status -eq "ProposalReceived") "La demande détecte immédiatement le collègue disponible"
 $signatureId = $signature.Data.id
+$automaticOffer = @($signature.Data.offers) | Where-Object { $_.signerId -eq $loginB.Data.id -and $_.availabilityId -eq $availability.Data.id }
+Assert-True ($null -ne $automaticOffer) "Une proposition proactive est créée automatiquement"
 $availableSignatures = Invoke-Api $agentB GET "/api/signatures/available"
-Assert-True (@($availableSignatures.Data).id -contains $signatureId) "La signature est visible par un autre agent"
+Assert-True (@($availableSignatures.Data).id -notcontains $signatureId) "Une demande déjà associée n'est pas reproposée au même agent"
 Invoke-Api $agentA POST "/api/signatures/$signatureId/offers" -Expected @(409) | Out-Null
-$offerResult = Invoke-Api $agentB POST "/api/signatures/$signatureId/offers"
-Assert-True ($offerResult.Data.status -eq "ProposalReceived") "Un agent peut se proposer comme signataire"
-$offerId = @($offerResult.Data.offers) | Where-Object signerId -eq $loginB.Data.id | Select-Object -ExpandProperty id
+$offerId = $automaticOffer.id
+$signatureNotificationsA = Invoke-Api $agentA GET "/api/notifications"
+$signatureNotificationsB = Invoke-Api $agentB GET "/api/notifications"
+Assert-True (@($signatureNotificationsA.Data).type -contains "SignatureAvailabilityMatched") "Le demandeur est notifié du collègue disponible"
+Assert-True (@($signatureNotificationsB.Data).type -contains "SignatureRequestMatched") "Le collègue disponible est notifié de la demande correspondante"
 Invoke-Api $agentB POST "/api/signatures/$signatureId/offers/$offerId/confirm" -Expected @(403) | Out-Null
 $lockedSignature = Invoke-Api $agentA POST "/api/signatures/$signatureId/offers/$offerId/confirm"
 Assert-True ($lockedSignature.Data.status -eq "Locked" -and $lockedSignature.Data.signerId -eq $loginB.Data.id) "Le demandeur choisit et verrouille le signataire"
 Invoke-Api $agentA POST "/api/signatures/$signatureId/cancel" -Expected @(409) | Out-Null
+$myAvailabilitiesAfterMatch = Invoke-Api $agentB GET "/api/signatures/availabilities/mine"
+$usedAvailability = @($myAvailabilitiesAfterMatch.Data) | Where-Object id -eq $availability.Data.id
+Assert-True ($usedAvailability.isActive -eq $false) "La disponibilité utilisée est automatiquement clôturée"
 $signatureNotificationsB = Invoke-Api $agentB GET "/api/notifications"
 Assert-True (@($signatureNotificationsB.Data).type -contains "SignatureOfferAccepted") "Le signataire choisi reçoit sa notification"
+
+$cancelDate = $start.AddDays(76).ToString("yyyy-MM-dd")
+$cancelAvailability = Invoke-Api $agentA POST "/api/signatures/availabilities" @{ serviceDate = $cancelDate; comment = "Disponibilité à retirer" }
+Invoke-Api $agentA POST "/api/signatures/availabilities/$($cancelAvailability.Data.id)/cancel" -Expected @(204) | Out-Null
+$cancelledAvailabilities = Invoke-Api $agentA GET "/api/signatures/availabilities/mine"
+$cancelledAvailability = @($cancelledAvailabilities.Data) | Where-Object id -eq $cancelAvailability.Data.id
+Assert-True ($cancelledAvailability.isActive -eq $false) "Un agent peut retirer une disponibilité proposée"
 
 Invoke-Api $agentA POST "/api/notifications/read-all" -Expected @(204) | Out-Null
 $unreadA = Invoke-Api $agentA GET "/api/notifications?unreadOnly=true"

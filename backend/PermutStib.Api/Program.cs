@@ -119,6 +119,7 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var database = scope.ServiceProvider.GetRequiredService<PermutStibDbContext>();
     await database.Database.EnsureCreatedAsync();
+    await DatabaseSchemaInitializer.ApplyAdditiveUpdatesAsync(database);
 }
 
 await AdminBootstrapper.SeedAsync(app.Services, app.Configuration);

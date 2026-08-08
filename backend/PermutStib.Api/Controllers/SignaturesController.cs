@@ -36,4 +36,20 @@ public sealed class SignaturesController(SignatureService signatures) : Authenti
         await signatures.CancelAsync(AgentId, requestId, cancellationToken);
         return NoContent();
     }
+
+    [HttpPost("availabilities")]
+    public async Task<ActionResult<SignatureAvailability>> CreateAvailability(
+        CreateSignatureAvailabilityCommand command, CancellationToken cancellationToken) =>
+        Ok(await signatures.CreateAvailabilityAsync(AgentId, command, cancellationToken));
+
+    [HttpGet("availabilities/mine")]
+    public async Task<ActionResult<IReadOnlyList<SignatureAvailability>>> MyAvailabilities(CancellationToken cancellationToken) =>
+        Ok(await signatures.GetMyAvailabilitiesAsync(AgentId, cancellationToken));
+
+    [HttpPost("availabilities/{availabilityId:guid}/cancel")]
+    public async Task<IActionResult> CancelAvailability(Guid availabilityId, CancellationToken cancellationToken)
+    {
+        await signatures.CancelAvailabilityAsync(AgentId, availabilityId, cancellationToken);
+        return NoContent();
+    }
 }

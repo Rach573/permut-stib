@@ -26,6 +26,15 @@ public sealed class SignatureService(ISignatureGateway gateway, IDateTimeProvide
     public Task CancelAsync(Guid requesterId, Guid requestId, CancellationToken cancellationToken) =>
         gateway.CancelAsync(requesterId, requestId, cancellationToken);
 
+    public Task<SignatureAvailability> CreateAvailabilityAsync(Guid agentId, CreateSignatureAvailabilityCommand command, CancellationToken cancellationToken) =>
+        gateway.CreateAvailabilityAsync(agentId, SignatureRules.ValidateAvailability(command, clock.Today), cancellationToken);
+
+    public Task<IReadOnlyList<SignatureAvailability>> GetMyAvailabilitiesAsync(Guid agentId, CancellationToken cancellationToken) =>
+        gateway.GetMyAvailabilitiesAsync(agentId, cancellationToken);
+
+    public Task CancelAvailabilityAsync(Guid agentId, Guid availabilityId, CancellationToken cancellationToken) =>
+        gateway.CancelAvailabilityAsync(agentId, availabilityId, cancellationToken);
+
     public Task<IReadOnlyList<HelpStatistics>> GetHelpStatisticsAsync(CancellationToken cancellationToken) =>
         gateway.GetHelpStatisticsAsync(cancellationToken);
 }

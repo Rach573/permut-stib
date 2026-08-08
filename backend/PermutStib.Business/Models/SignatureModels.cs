@@ -18,11 +18,21 @@ public enum SignatureOfferStatus
 }
 
 public sealed record CreateSignatureCommand(DateOnly ServiceDate, string? Comment);
+public sealed record CreateSignatureAvailabilityCommand(DateOnly ServiceDate, string? Comment);
+
+public sealed record SignatureAvailability(
+    Guid Id,
+    Guid AgentId,
+    DateOnly ServiceDate,
+    string? Comment,
+    bool IsActive,
+    DateTimeOffset CreatedAt);
 
 public sealed record SignatureOffer(
     Guid Id,
     Guid RequestId,
     Guid SignerId,
+    Guid? AvailabilityId,
     SignatureOfferStatus Status,
     DateTimeOffset CreatedAt);
 
@@ -44,4 +54,3 @@ public sealed record HelpStatistics(
     int SignaturesGiven,
     int SignatureOffers,
     decimal? HelpRatio);
-
