@@ -39,7 +39,15 @@ public sealed class SignatureGateway(PermutStibDbContext db) : ISignatureGateway
             Notify(requesterId, NotificationType.SignatureAvailabilityMatched,
                 $"{matchingAvailabilities.Count} agent(s) disponible(s) correspondent déjà à votre demande de signature.", entity.Id);
         }
-        Audit(entity.Id, "Created", requesterId, requesterId, null, entity);
+        Audit(entity.Id, "Created", requesterId, requesterId, null, new
+        {
+            entity.Id,
+            entity.RequesterId,
+            entity.ServiceDate,
+            entity.Comment,
+            entity.Status,
+            OfferCount = entity.Offers.Count
+        });
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return Map(entity);
