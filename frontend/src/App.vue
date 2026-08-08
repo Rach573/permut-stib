@@ -22,8 +22,15 @@ const helpStatistics = ref<HelpStatistics[]>([])
 const adminAudit = ref<AdminAuditEntry[]>([])
 const adminTab = ref<'home' | 'agents' | 'exchanges' | 'audit'>('home')
 const agentFilter = ref('')
-const splashVisible = ref(true)
+const nativeShell = new URLSearchParams(location.search).get('native') === '1'
+const splashVisible = ref(!nativeShell)
 let restoringHistory = false
+let splashFallbackTimer: number | undefined
+
+function finishSplash() {
+  splashVisible.value = false
+  if (splashFallbackTimer !== undefined) window.clearTimeout(splashFallbackTimer)
+}
 
 async function execute(action: () => Promise<void>) {
   error.value = ''; busy.value = true
@@ -84,7 +91,7 @@ watch([view, adminTab], ([nextView, nextAdminTab]) => {
 onMounted(async () => {
   history.replaceState({ view: view.value, adminTab: adminTab.value }, '')
   window.addEventListener('popstate', restoreFromHistory)
-  window.setTimeout(() => { splashVisible.value = false }, 900)
+  if (splashVisible.value) splashFallbackTimer = window.setTimeout(finishSplash, 7000)
   if (import.meta.env.DEV && new URLSearchParams(location.search).get('preview') === 'admin') {
     session.value = { id: 'preview', matricule: 'DÉLÉGUÉ', role: 'Admin' }
     view.value = 'home'
@@ -93,12 +100,15 @@ onMounted(async () => {
   try { session.value = await api.me(); view.value = 'home'; if (session.value.role === 'Admin') await loadAdminData(); else notifications.value = await api.notifications() } catch { /* aucune session */ }
 })
 
-onBeforeUnmount(() => window.removeEventListener('popstate', restoreFromHistory))
+onBeforeUnmount(() => {
+  window.removeEventListener('popstate', restoreFromHistory)
+  if (splashFallbackTimer !== undefined) window.clearTimeout(splashFallbackTimer)
+})
 </script>
 
 <template>
   <main class="shell">
-    <Transition name="splash-fade"><div v-if="splashVisible" class="splash-screen"><img src="/logo-csc.png" alt="Logo CSC" /><strong>Permut' STIB</strong><small>L’entraide entre collègues</small></div></Transition>
+    <Transition name="splash-fade"><div v-if="splashVisible" class="splash-screen"><video src="/csc-stib-ouverture.mp4" autoplay muted playsinline preload="auto" aria-label="Animation d'ouverture CSC STIB" @ended="finishSplash" @error="finishSplash" /><button class="skip-splash" type="button" @click="finishSplash">Passer</button></div></Transition>
     <header><span class="mark">↔</span><div><strong>Permut' STIB</strong><small>Entraide entre agents</small></div></header>
     <p v-if="error" class="error notice">{{ error }}</p>
 

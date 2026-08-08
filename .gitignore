@@ -14,5 +14,7 @@ dist/
 .data-protection-keys/
 .npm-cache/
 mobile-test/build/
+mobile-test/build-*/
 mobile-test/*.jks
+Permut-STIB-Alpha-v4.apk
 .deployment-test-*/
