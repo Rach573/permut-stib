@@ -28,6 +28,19 @@ button:disabled { opacity: .6; cursor: wait; }
 .error { color: #b42318; margin: 0; }
 .notice { background: #fee4e2; border-radius: 10px; padding: 10px 12px; }
 .actions, .stack { display: grid; gap: 12px; }
+.category-grid { display: grid; gap: 14px; margin-top: 18px; }
+.category-card { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 13px; padding: 17px; text-align: left; background: white; color: #172033; border: 1px solid #d8e4e0; box-shadow: 0 8px 22px rgba(17,72,59,.07); }
+.category-card > span:nth-child(2) { display: grid; gap: 4px; }
+.category-card strong { font-size: 1.05rem; }
+.category-card small { color: #64748b; font-weight: 500; line-height: 1.35; }
+.category-card > b { color: #087961; font-size: 1.6rem; }
+.category-icon, .menu-symbol { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 13px; background: #e0f2ec; color: #07634f; font-size: 1.35rem; }
+.menu-panel { display: grid; gap: 8px; }
+.menu-panel > p { margin: 0 0 10px; }
+.menu-panel .actions button { display: grid; gap: 5px; text-align: left; }
+.menu-panel .actions button small { font-weight: 500; color: rgba(255,255,255,.78); line-height: 1.35; }
+.back-link { width: auto; justify-self: start; margin: -8px 0 8px; padding: 7px 0; background: transparent; color: #526174; box-shadow: none; }
+.menu-symbol { margin-bottom: 4px; }
 .stack > h2 { margin: 12px 0 0; }
 .stack .panel { padding: 18px; }
 .panel h2 { margin: 8px 0; font-size: 1.15rem; }
