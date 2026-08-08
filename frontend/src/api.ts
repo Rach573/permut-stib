@@ -21,6 +21,12 @@ export type Signature = {
   id: string; requesterId: string; serviceDate: string; comment?: string; status: string; signerId?: string; offers: SignatureOffer[]
 }
 export type AgentNotification = { id: string; type: string; message: string; entityType: string; entityId: string; isRead: boolean; createdAt: string }
+export type AdminSummary = { pendingAgents: number; activeAgents: number; suspendedAgents: number; openPermutations: number; confirmedPermutations: number; openSignatures: number; confirmedSignatures: number; auditEvents: number }
+export type AdminAgent = { id: string; matricule: string; phoneNumber: string; status: 'Pending' | 'Active' | 'Suspended' | 'Rejected'; role: 'Agent' | 'Admin'; createdAt: string }
+export type AdminPermutation = { id: string; requesterMatricule: string; ownedFrom: string; ownedTo: string; wantedFrom: string; wantedTo: string; status: string; proposalCount: number; createdAt: string }
+export type AdminSignature = { id: string; requesterMatricule: string; serviceDate: string; comment?: string; status: string; signerMatricule?: string; offerCount: number; createdAt: string }
+export type HelpStatistics = { agentId: string; matricule: string; signaturesReceived: number; signaturesGiven: number; signatureOffers: number; helpRatio?: number }
+export type AdminAuditEntry = { id: number; entityType: string; entityId: string; action: string; actorMatricule?: string; subjectMatricule?: string; beforeJson?: string; afterJson?: string; reason?: string; createdAt: string }
 
 async function request<T>(url: string, options: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -28,6 +34,7 @@ async function request<T>(url: string, options: RequestInit): Promise<T> {
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
+      'X-Permut-STIB': 'app',
       ...(options.headers ?? {}),
     },
   })
@@ -62,4 +69,11 @@ export const api = {
   notifications: (unreadOnly = false) => request<AgentNotification[]>(`/api/notifications?unreadOnly=${unreadOnly}`, { method: 'GET' }),
   markNotificationRead: (id: string) => request<void>(`/api/notifications/${id}/read`, { method: 'POST' }),
   markAllNotificationsRead: () => request<void>('/api/notifications/read-all', { method: 'POST' }),
+  adminSummary: () => request<AdminSummary>('/api/admin/summary', { method: 'GET' }),
+  adminAgents: () => request<AdminAgent[]>('/api/admin/agents', { method: 'GET' }),
+  setAgentStatus: (id: string, status: AdminAgent['status'], reason: string) => request<void>(`/api/admin/agents/${id}/status`, { method: 'POST', body: JSON.stringify({ status, reason }) }),
+  adminPermutations: () => request<AdminPermutation[]>('/api/admin/permutations', { method: 'GET' }),
+  adminSignatures: () => request<AdminSignature[]>('/api/admin/signatures', { method: 'GET' }),
+  helpStatistics: () => request<HelpStatistics[]>('/api/admin/help-statistics', { method: 'GET' }),
+  adminAudit: () => request<AdminAuditEntry[]>('/api/admin/audit', { method: 'GET' }),
 }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using PermutStib.Business.Models;
 using PermutStib.Business.Services;
 
@@ -22,6 +23,7 @@ public sealed class AuthController(AccountService accounts) : ControllerBase
     });
 
     [HttpPost("register")]
+    [EnableRateLimiting("authentication")]
     public async Task<IActionResult> Register(RegisterAgentCommand command, CancellationToken cancellationToken)
     {
         try
@@ -40,6 +42,7 @@ public sealed class AuthController(AccountService accounts) : ControllerBase
     }
 
     [HttpPost("login")]
+    [EnableRateLimiting("authentication")]
     public async Task<IActionResult> Login(LoginCommand command, CancellationToken cancellationToken)
     {
         var account = await accounts.LoginAsync(command, cancellationToken);
@@ -59,7 +62,12 @@ public sealed class AuthController(AccountService accounts) : ControllerBase
             new ClaimsPrincipal(identity),
             new AuthenticationProperties { IsPersistent = true });
 
-        return Ok(new { account.Id, account.Matricule, account.Role });
+        return Ok(new
+        {
+            id = account.Id,
+            matricule = account.Matricule,
+            role = account.Role.ToString()
+        });
     }
 
     [HttpPost("logout")]

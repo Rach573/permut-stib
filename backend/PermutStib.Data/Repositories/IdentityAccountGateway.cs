@@ -12,6 +12,8 @@ public sealed class IdentityAccountGateway(UserManager<AgentUser> userManager) :
     {
         if (await userManager.Users.AnyAsync(x => x.Matricule == command.Matricule, cancellationToken))
             throw new InvalidOperationException("Ce matricule possède déjà un compte.");
+        if (await userManager.Users.AnyAsync(x => x.PhoneNumber == command.PhoneNumber, cancellationToken))
+            throw new InvalidOperationException("Ce numéro de GSM possède déjà un compte.");
 
         var user = new AgentUser
         {

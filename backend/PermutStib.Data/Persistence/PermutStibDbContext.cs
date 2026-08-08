@@ -22,6 +22,7 @@ public sealed class PermutStibDbContext(DbContextOptions<PermutStibDbContext> op
         builder.Entity<AgentUser>(entity =>
         {
             entity.HasIndex(x => x.Matricule).IsUnique();
+            entity.HasIndex(x => x.PhoneNumber).IsUnique();
             entity.Property(x => x.Matricule).HasMaxLength(20);
             entity.Property(x => x.PhoneNumber).HasMaxLength(32);
         });
@@ -31,7 +32,6 @@ public sealed class PermutStibDbContext(DbContextOptions<PermutStibDbContext> op
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
             entity.HasIndex(x => new { x.RequesterId, x.Status });
-            entity.Property(x => x.Version).IsRowVersion();
             entity.HasMany(x => x.Proposals).WithOne(x => x.Request).HasForeignKey(x => x.RequestId);
         });
 
@@ -48,7 +48,6 @@ public sealed class PermutStibDbContext(DbContextOptions<PermutStibDbContext> op
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
             entity.Property(x => x.Comment).HasMaxLength(500);
             entity.HasIndex(x => new { x.ServiceDate, x.Status });
-            entity.Property(x => x.Version).IsRowVersion();
             entity.HasMany(x => x.Offers).WithOne(x => x.Request).HasForeignKey(x => x.RequestId);
         });
 

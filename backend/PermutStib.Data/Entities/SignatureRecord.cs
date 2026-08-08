@@ -12,6 +12,5 @@ public sealed class SignatureRecord
     public SignatureStatus Status { get; set; } = SignatureStatus.Open;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? LockedAt { get; set; }
-    public uint Version { get; set; }
     public List<SignatureOfferRecord> Offers { get; set; } = [];
 }

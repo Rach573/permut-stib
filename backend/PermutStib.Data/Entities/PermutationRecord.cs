@@ -16,6 +16,5 @@ public sealed class PermutationRecord
     public bool PartnerConfirmed { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? LockedAt { get; set; }
-    public uint Version { get; set; }
     public List<PermutationProposalRecord> Proposals { get; set; } = [];
 }

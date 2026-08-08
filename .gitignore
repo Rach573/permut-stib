@@ -11,3 +11,8 @@ dist/
 *.user
 *.suo
 .nuget-appdata/
+.data-protection-keys/
+.npm-cache/
+mobile-test/build/
+mobile-test/*.jks
+.deployment-test-*/

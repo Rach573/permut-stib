@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using PermutStib.Business.Models;
 using PermutStib.Business.Services;
+using PermutStib.Business.Rules;
 using PermutStib.Data.Entities;
 using PermutStib.Data.Persistence;
 
@@ -29,7 +30,9 @@ public sealed class PermutationGateway(PermutStibDbContext db) : IPermutationGat
             .OrderByDescending(x => x.CreatedAt).ToListAsync(cancellationToken)).Select(Map).ToList();
 
     public async Task<IReadOnlyList<PermutationDetails>> GetAvailableAsync(Guid agentId, CancellationToken cancellationToken) =>
-        (await Query().Where(x => x.RequesterId != agentId && x.Status == PermutationStatus.Open)
+        (await Query().Where(x => x.RequesterId != agentId &&
+                (x.Status == PermutationStatus.Open || x.Status == PermutationStatus.ProposalReceived) &&
+                x.Proposals.All(p => p.PartnerId != agentId))
             .OrderBy(x => x.WantedFrom).ToListAsync(cancellationToken)).Select(Map).ToList();
 
     public async Task<PermutationDetails> ProposeAsync(Guid partnerId, ProposePermutationCommand command, CancellationToken cancellationToken)
@@ -37,23 +40,18 @@ public sealed class PermutationGateway(PermutStibDbContext db) : IPermutationGat
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var request = await Query().SingleOrDefaultAsync(x => x.Id == command.RequestId, cancellationToken)
             ?? throw new KeyNotFoundException("Demande de permutation introuvable.");
-        if (request.RequesterId == partnerId) throw new BusinessRuleException("Vous ne pouvez pas répondre à votre propre demande.");
-        if (request.Status is not PermutationStatus.Open and not PermutationStatus.ProposalReceived)
-            throw new BusinessRuleException("Cette demande n'accepte plus de proposition.");
-        if (command.OfferedPeriod.From != request.WantedFrom || command.OfferedPeriod.To != request.WantedTo)
-            throw new BusinessRuleException("La période proposée doit correspondre à la période recherchée.");
-        if (request.Proposals.Any(x => x.PartnerId == partnerId))
-            throw new BusinessRuleException("Vous avez déjà proposé une période pour cette demande.");
+        PermutationRules.EnsureCanPropose(Map(request), partnerId, command.OfferedPeriod);
 
         var proposal = new PermutationProposalRecord
         {
             Id = Guid.NewGuid(), RequestId = request.Id, Request = request, PartnerId = partnerId,
             OfferedFrom = command.OfferedPeriod.From, OfferedTo = command.OfferedPeriod.To
         };
-        request.Proposals.Add(proposal);
+        db.PermutationProposals.Add(proposal);
         request.Status = PermutationStatus.ProposalReceived;
         Notify(request.RequesterId, NotificationType.PermutationProposalReceived, "Un agent propose sa période pour votre permutation.", request.Id);
-        Audit("Permutation", request.Id, "ProposalCreated", partnerId, request.RequesterId, null, proposal);
+        Audit("Permutation", request.Id, "ProposalCreated", partnerId, request.RequesterId, null,
+            new { proposal.Id, proposal.RequestId, proposal.PartnerId, proposal.OfferedFrom, proposal.OfferedTo, proposal.Status });
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return Map(request);
@@ -61,10 +59,10 @@ public sealed class PermutationGateway(PermutStibDbContext db) : IPermutationGat
 
     public async Task<PermutationDetails> AcceptProposalAsync(Guid requesterId, Guid requestId, Guid proposalId, CancellationToken cancellationToken)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var request = await Query().SingleOrDefaultAsync(x => x.Id == requestId, cancellationToken)
             ?? throw new KeyNotFoundException("Demande de permutation introuvable.");
-        if (request.RequesterId != requesterId) throw new UnauthorizedAccessException("Seul le demandeur peut accepter une proposition.");
-        if (request.Status != PermutationStatus.ProposalReceived) throw new BusinessRuleException("La demande n'est pas en attente d'acceptation.");
+        PermutationRules.EnsureCanAccept(Map(request), requesterId, proposalId);
         var proposal = request.Proposals.SingleOrDefault(x => x.Id == proposalId)
             ?? throw new KeyNotFoundException("Proposition introuvable.");
         proposal.Status = PermutationProposalStatus.Accepted;
@@ -75,6 +73,7 @@ public sealed class PermutationGateway(PermutStibDbContext db) : IPermutationGat
         Notify(proposal.PartnerId, NotificationType.PermutationProposalAccepted, "Votre proposition de permutation a été acceptée. Vous devez maintenant confirmer.", request.Id);
         Audit("Permutation", request.Id, "ProposalAccepted", requesterId, proposal.PartnerId, null, new { proposalId });
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return Map(request);
     }
 
@@ -83,20 +82,18 @@ public sealed class PermutationGateway(PermutStibDbContext db) : IPermutationGat
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var request = await Query().SingleOrDefaultAsync(x => x.Id == requestId, cancellationToken)
             ?? throw new KeyNotFoundException("Demande de permutation introuvable.");
-        if (request.Status is not PermutationStatus.Accepted and not PermutationStatus.Confirmed)
-            throw new BusinessRuleException("Cette permutation ne peut pas être confirmée.");
         var accepted = request.Proposals.Single(x => x.Id == request.AcceptedProposalId);
-        if (agentId == request.RequesterId) request.RequesterConfirmed = true;
-        else if (agentId == accepted.PartnerId) request.PartnerConfirmed = true;
-        else throw new UnauthorizedAccessException("Vous ne participez pas à cette permutation.");
+        var decision = PermutationRules.DecideConfirmation(Map(request), agentId);
+        request.RequesterConfirmed = decision.RequesterConfirmed;
+        request.PartnerConfirmed = decision.PartnerConfirmed;
 
-        if (request.RequesterConfirmed && request.PartnerConfirmed)
+        if (decision.Status == PermutationStatus.Locked)
         {
             var conflict = await db.Permutations.AnyAsync(x => x.Id != request.Id && x.Status == PermutationStatus.Locked &&
                 ((x.RequesterId == request.RequesterId && x.OwnedFrom <= request.OwnedTo && request.OwnedFrom <= x.OwnedTo) ||
                  (x.Proposals.Any(p => p.Id == x.AcceptedProposalId && p.PartnerId == accepted.PartnerId) &&
                   x.Proposals.Any(p => p.Id == x.AcceptedProposalId && p.OfferedFrom <= accepted.OfferedTo && accepted.OfferedFrom <= p.OfferedTo))), cancellationToken);
-            if (conflict) throw new BusinessRuleException("Une des périodes est déjà engagée dans une permutation verrouillée.");
+            PermutationRules.EnsureNoLockedConflict(conflict);
             request.Status = PermutationStatus.Locked;
             request.LockedAt = DateTimeOffset.UtcNow;
             Notify(request.RequesterId, NotificationType.PermutationLocked, "Votre permutation est confirmée et définitivement verrouillée.", request.Id);
@@ -105,8 +102,7 @@ public sealed class PermutationGateway(PermutStibDbContext db) : IPermutationGat
         else
         {
             request.Status = PermutationStatus.Confirmed;
-            var recipientId = agentId == request.RequesterId ? accepted.PartnerId : request.RequesterId;
-            Notify(recipientId, NotificationType.PermutationConfirmed, "L'autre agent a confirmé la permutation. Votre confirmation est attendue.", request.Id);
+            Notify(decision.NotificationRecipientId!.Value, NotificationType.PermutationConfirmed, "L'autre agent a confirmé la permutation. Votre confirmation est attendue.", request.Id);
         }
 
         Audit("Permutation", request.Id, request.Status == PermutationStatus.Locked ? "Locked" : "Confirmed", agentId, request.RequesterId, null, new { request.RequesterConfirmed, request.PartnerConfirmed });
@@ -117,11 +113,9 @@ public sealed class PermutationGateway(PermutStibDbContext db) : IPermutationGat
 
     public async Task CancelAsync(Guid requesterId, Guid requestId, CancellationToken cancellationToken)
     {
-        var request = await db.Permutations.SingleOrDefaultAsync(x => x.Id == requestId, cancellationToken)
+        var request = await Query().SingleOrDefaultAsync(x => x.Id == requestId, cancellationToken)
             ?? throw new KeyNotFoundException("Demande de permutation introuvable.");
-        if (request.RequesterId != requesterId) throw new UnauthorizedAccessException("Seul le demandeur peut annuler sa demande.");
-        if (request.Status is PermutationStatus.Confirmed or PermutationStatus.Locked)
-            throw new BusinessRuleException("Une permutation confirmée ne peut plus être annulée par un agent.");
+        PermutationRules.EnsureCanCancel(Map(request), requesterId);
         request.Status = PermutationStatus.Cancelled;
         Audit("Permutation", request.Id, "Cancelled", requesterId, requesterId, null, null);
         await db.SaveChangesAsync(cancellationToken);

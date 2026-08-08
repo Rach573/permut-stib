@@ -9,7 +9,7 @@ namespace PermutStib.Api;
 
 public static class DemoDataSeeder
 {
-    private const string DemoPassword = "Demo-STIB-2026!";
+    private const string DemoPassword = "test1234";
 
     public static async Task SeedAsync(IServiceProvider services, IConfiguration configuration)
     {
@@ -18,7 +18,12 @@ public static class DemoDataSeeder
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<PermutStibDbContext>();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<AgentUser>>();
-        if (await users.Users.AnyAsync(x => x.Matricule == "70-001")) return;
+        if (await users.Users.AnyAsync(x => x.Matricule == "70-001"))
+        {
+            await ResetDemoPasswordsAsync(users);
+            await PrintCountsAsync(db);
+            return;
+        }
 
         var now = DateTimeOffset.UtcNow;
         var admin = await CreateUserAsync(users, "DELEGUE", "+32479000000", AgentStatus.Active, AgentRole.Admin);
@@ -104,6 +109,7 @@ public static class DemoDataSeeder
             });
 
         await db.SaveChangesAsync();
+        await PrintCountsAsync(db);
     }
 
     private static async Task<AgentUser> CreateUserAsync(UserManager<AgentUser> users, string matricule, string phone, AgentStatus status, AgentRole role)
@@ -114,7 +120,39 @@ public static class DemoDataSeeder
         return user;
     }
 
+    private static async Task ResetDemoPasswordsAsync(UserManager<AgentUser> users)
+    {
+        var demoUsers = await users.Users
+            .Where(x => x.Matricule == "DELEGUE" || x.Matricule.StartsWith("70-"))
+            .ToListAsync();
+
+        foreach (var user in demoUsers)
+        {
+            var removeResult = await users.RemovePasswordAsync(user);
+            if (!removeResult.Succeeded)
+                throw new InvalidOperationException($"Suppression du mot de passe de {user.Matricule} impossible : {string.Join(" ", removeResult.Errors.Select(x => x.Description))}");
+
+            var result = await users.AddPasswordAsync(user, DemoPassword);
+            if (!result.Succeeded)
+                throw new InvalidOperationException($"Réinitialisation de {user.Matricule} impossible : {string.Join(" ", result.Errors.Select(x => x.Description))}");
+        }
+    }
+
     private static void AddAudit(PermutStibDbContext db, string type, Guid entityId, string action, Guid actorId, Guid subjectId, object data) =>
         db.AuditLog.Add(new AuditRecord { EntityType = type, EntityId = entityId.ToString(), Action = action, ActorId = actorId,
             SubjectUserId = subjectId, AfterJson = JsonSerializer.Serialize(data) });
+
+    private static async Task PrintCountsAsync(PermutStibDbContext db)
+    {
+        Console.WriteLine("DEMO_DATA_VERIFIED " + JsonSerializer.Serialize(new
+        {
+            Users = await db.Users.CountAsync(),
+            Agents = await db.Users.CountAsync(x => x.AppRole == AgentRole.Agent),
+            Admins = await db.Users.CountAsync(x => x.AppRole == AgentRole.Admin),
+            Permutations = await db.Permutations.CountAsync(),
+            Signatures = await db.Signatures.CountAsync(),
+            Notifications = await db.Notifications.CountAsync(),
+            AuditRecords = await db.AuditLog.CountAsync()
+        }));
+    }
 }

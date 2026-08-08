@@ -16,8 +16,8 @@ public sealed partial class AccountService(IAccountGateway gateway)
         if (!BelgianPhoneRegex().IsMatch(phone))
             throw new ArgumentException("Le numéro de GSM est invalide.");
 
-        if (command.Password.Length < 10)
-            throw new ArgumentException("Le mot de passe doit contenir au moins 10 caractères.");
+        if (command.Password.Length < 8)
+            throw new ArgumentException("Le mot de passe doit contenir au moins 8 caractères.");
 
         return gateway.RegisterAsync(command with { Matricule = matricule, PhoneNumber = phone }, cancellationToken);
     }
@@ -43,4 +43,3 @@ public sealed partial class AccountService(IAccountGateway gateway)
     [GeneratedRegex(@"^(\+32|0)4\d{8}$")]
     private static partial Regex BelgianPhoneRegex();
 }
-

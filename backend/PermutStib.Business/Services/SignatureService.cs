@@ -1,17 +1,14 @@
 using PermutStib.Business.Models;
+using PermutStib.Business.Abstractions;
+using PermutStib.Business.Rules;
 
 namespace PermutStib.Business.Services;
 
-public sealed class SignatureService(ISignatureGateway gateway)
+public sealed class SignatureService(ISignatureGateway gateway, IDateTimeProvider clock)
 {
     public Task<SignatureDetails> CreateAsync(Guid requesterId, CreateSignatureCommand command, CancellationToken cancellationToken)
     {
-        if (command.ServiceDate < DateOnly.FromDateTime(DateTime.UtcNow))
-            throw new ArgumentException("La date de signature ne peut pas être dans le passé.");
-        if (command.Comment?.Length > 500)
-            throw new ArgumentException("Le commentaire ne peut pas dépasser 500 caractères.");
-
-        return gateway.CreateAsync(requesterId, command with { Comment = command.Comment?.Trim() }, cancellationToken);
+        return gateway.CreateAsync(requesterId, SignatureRules.ValidateCreation(command, clock.Today), cancellationToken);
     }
 
     public Task<IReadOnlyList<SignatureDetails>> GetMineAsync(Guid agentId, CancellationToken cancellationToken) =>

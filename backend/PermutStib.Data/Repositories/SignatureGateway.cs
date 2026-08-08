@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using PermutStib.Business.Models;
 using PermutStib.Business.Services;
+using PermutStib.Business.Rules;
 using PermutStib.Data.Entities;
 using PermutStib.Data.Persistence;
 
@@ -12,13 +13,14 @@ public sealed class SignatureGateway(PermutStibDbContext db) : ISignatureGateway
 {
     public async Task<SignatureDetails> CreateAsync(Guid requesterId, CreateSignatureCommand command, CancellationToken cancellationToken)
     {
-        if (await db.Signatures.AnyAsync(x => x.RequesterId == requesterId && x.ServiceDate == command.ServiceDate &&
-            x.Status != SignatureStatus.Cancelled, cancellationToken))
-            throw new BusinessRuleException("Une demande existe déjà pour cette date.");
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        SignatureRules.EnsureNoDuplicate(await db.Signatures.AnyAsync(x => x.RequesterId == requesterId && x.ServiceDate == command.ServiceDate &&
+            x.Status != SignatureStatus.Cancelled, cancellationToken));
         var entity = new SignatureRecord { Id = Guid.NewGuid(), RequesterId = requesterId, ServiceDate = command.ServiceDate, Comment = command.Comment };
         db.Signatures.Add(entity);
         Audit(entity.Id, "Created", requesterId, requesterId, null, entity);
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return Map(entity);
     }
 
@@ -34,15 +36,13 @@ public sealed class SignatureGateway(PermutStibDbContext db) : ISignatureGateway
     {
         var request = await Query().SingleOrDefaultAsync(x => x.Id == requestId, cancellationToken)
             ?? throw new KeyNotFoundException("Demande de signature introuvable.");
-        if (request.RequesterId == signerId) throw new BusinessRuleException("Vous ne pouvez pas signer pour vous-même.");
-        if (request.Status is SignatureStatus.Locked or SignatureStatus.Cancelled)
-            throw new BusinessRuleException("Cette demande n'accepte plus de signataire.");
-        if (request.Offers.Any(x => x.SignerId == signerId)) throw new BusinessRuleException("Vous vous êtes déjà proposé.");
+        SignatureRules.EnsureCanOffer(Map(request), signerId);
         var offer = new SignatureOfferRecord { Id = Guid.NewGuid(), RequestId = request.Id, Request = request, SignerId = signerId };
-        request.Offers.Add(offer);
+        db.SignatureOffers.Add(offer);
         request.Status = SignatureStatus.ProposalReceived;
         Notify(request.RequesterId, NotificationType.SignatureOfferReceived, "Un agent se propose pour signer à votre place.", request.Id);
-        Audit(request.Id, "SignerOffered", signerId, request.RequesterId, null, offer);
+        Audit(request.Id, "SignerOffered", signerId, request.RequesterId, null,
+            new { offer.Id, offer.RequestId, offer.SignerId, offer.Status, offer.CreatedAt });
         await db.SaveChangesAsync(cancellationToken);
         return Map(request);
     }
@@ -52,12 +52,10 @@ public sealed class SignatureGateway(PermutStibDbContext db) : ISignatureGateway
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var request = await Query().SingleOrDefaultAsync(x => x.Id == requestId, cancellationToken)
             ?? throw new KeyNotFoundException("Demande de signature introuvable.");
-        if (request.RequesterId != requesterId) throw new UnauthorizedAccessException("Seul le demandeur peut confirmer un signataire.");
-        if (request.Status != SignatureStatus.ProposalReceived) throw new BusinessRuleException("Aucun signataire ne peut être confirmé.");
-        var offer = request.Offers.SingleOrDefault(x => x.Id == offerId) ?? throw new KeyNotFoundException("Proposition de signature introuvable.");
-        if (await db.Signatures.AnyAsync(x => x.Id != requestId && x.ServiceDate == request.ServiceDate &&
-            x.SignerId == offer.SignerId && x.Status == SignatureStatus.Locked, cancellationToken))
-            throw new BusinessRuleException("Ce signataire est déjà engagé pour cette date.");
+        SignatureRules.EnsureCanConfirm(Map(request), requesterId, offerId);
+        var offer = request.Offers.Single(x => x.Id == offerId);
+        SignatureRules.EnsureSignerAvailable(await db.Signatures.AnyAsync(x => x.Id != requestId && x.ServiceDate == request.ServiceDate &&
+            x.SignerId == offer.SignerId && x.Status == SignatureStatus.Locked, cancellationToken));
         offer.Status = SignatureOfferStatus.Selected;
         foreach (var other in request.Offers.Where(x => x.Id != offerId && x.Status == SignatureOfferStatus.Pending)) other.Status = SignatureOfferStatus.Rejected;
         request.SignerId = offer.SignerId;
@@ -72,10 +70,9 @@ public sealed class SignatureGateway(PermutStibDbContext db) : ISignatureGateway
 
     public async Task CancelAsync(Guid requesterId, Guid requestId, CancellationToken cancellationToken)
     {
-        var request = await db.Signatures.SingleOrDefaultAsync(x => x.Id == requestId, cancellationToken)
+        var request = await Query().SingleOrDefaultAsync(x => x.Id == requestId, cancellationToken)
             ?? throw new KeyNotFoundException("Demande de signature introuvable.");
-        if (request.RequesterId != requesterId) throw new UnauthorizedAccessException("Seul le demandeur peut annuler sa demande.");
-        if (request.Status == SignatureStatus.Locked) throw new BusinessRuleException("Une signature confirmée ne peut plus être annulée par un agent.");
+        SignatureRules.EnsureCanCancel(Map(request), requesterId);
         request.Status = SignatureStatus.Cancelled;
         Audit(request.Id, "Cancelled", requesterId, requesterId, null, null);
         await db.SaveChangesAsync(cancellationToken);

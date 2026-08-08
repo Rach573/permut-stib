@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: permut-stib-alpha
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__Postgres
+        sync: false
+      - key: BootstrapAdmin__Matricule
+        value: DELEGUE
+      - key: BootstrapAdmin__PhoneNumber
+        sync: false
+      - key: BootstrapAdmin__Password
+        sync: false
+      - key: DemoData__Enabled
+        value: "true"
