@@ -129,6 +129,9 @@ public static class DemoDataSeeder
 
         foreach (var user in demoUsers)
         {
+            await users.SetLockoutEndDateAsync(user, null);
+            await users.ResetAccessFailedCountAsync(user);
+
             var removeResult = await users.RemovePasswordAsync(user);
             if (!removeResult.Succeeded)
                 throw new InvalidOperationException($"Suppression du mot de passe de {user.Matricule} impossible : {string.Join(" ", removeResult.Errors.Select(x => x.Description))}");
