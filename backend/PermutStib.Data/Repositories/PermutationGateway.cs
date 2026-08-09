@@ -49,7 +49,7 @@ public sealed class PermutationGateway(PermutStibDbContext db) : IPermutationGat
         };
         db.PermutationProposals.Add(proposal);
         request.Status = PermutationStatus.ProposalReceived;
-        Notify(request.RequesterId, NotificationType.PermutationProposalReceived, "Un agent propose sa période pour votre permutation.", request.Id);
+        Notify(request.RequesterId, NotificationType.PermutationProposalReceived, "Nouvelle proposition de permutation.", request.Id);
         Audit("Permutation", request.Id, "ProposalCreated", partnerId, request.RequesterId, null,
             new { proposal.Id, proposal.RequestId, proposal.PartnerId, proposal.OfferedFrom, proposal.OfferedTo, proposal.Status });
         await db.SaveChangesAsync(cancellationToken);
@@ -70,7 +70,7 @@ public sealed class PermutationGateway(PermutStibDbContext db) : IPermutationGat
             other.Status = PermutationProposalStatus.Rejected;
         request.AcceptedProposalId = proposalId;
         request.Status = PermutationStatus.Accepted;
-        Notify(proposal.PartnerId, NotificationType.PermutationProposalAccepted, "Votre proposition de permutation a été acceptée. Vous devez maintenant confirmer.", request.Id);
+        Notify(proposal.PartnerId, NotificationType.PermutationProposalAccepted, "Proposition acceptée : confirmez l’échange.", request.Id);
         Audit("Permutation", request.Id, "ProposalAccepted", requesterId, proposal.PartnerId, null, new { proposalId });
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -96,13 +96,13 @@ public sealed class PermutationGateway(PermutStibDbContext db) : IPermutationGat
             PermutationRules.EnsureNoLockedConflict(conflict);
             request.Status = PermutationStatus.Locked;
             request.LockedAt = DateTimeOffset.UtcNow;
-            Notify(request.RequesterId, NotificationType.PermutationLocked, "Votre permutation est confirmée et définitivement verrouillée.", request.Id);
-            Notify(accepted.PartnerId, NotificationType.PermutationLocked, "Votre permutation est confirmée et définitivement verrouillée.", request.Id);
+            Notify(request.RequesterId, NotificationType.PermutationLocked, "Permutation confirmée.", request.Id);
+            Notify(accepted.PartnerId, NotificationType.PermutationLocked, "Permutation confirmée.", request.Id);
         }
         else
         {
             request.Status = PermutationStatus.Confirmed;
-            Notify(decision.NotificationRecipientId!.Value, NotificationType.PermutationConfirmed, "L'autre agent a confirmé la permutation. Votre confirmation est attendue.", request.Id);
+            Notify(decision.NotificationRecipientId!.Value, NotificationType.PermutationConfirmed, "Le collègue a confirmé. À votre tour.", request.Id);
         }
 
         Audit("Permutation", request.Id, request.Status == PermutationStatus.Locked ? "Locked" : "Confirmed", agentId, request.RequesterId, null, new { request.RequesterConfirmed, request.PartnerConfirmed });

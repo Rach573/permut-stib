@@ -31,13 +31,13 @@ public sealed class SignatureGateway(PermutStibDbContext db) : ISignatureGateway
                 AvailabilityId = availability.Id
             });
             Notify(availability.AgentId, NotificationType.SignatureRequestMatched,
-                "Une demande de signature correspond à l'une de vos disponibilités.", entity.Id);
+                "Demande correspondant à votre disponibilité.", entity.Id);
         }
         if (matchingAvailabilities.Count > 0)
         {
             entity.Status = SignatureStatus.ProposalReceived;
             Notify(requesterId, NotificationType.SignatureAvailabilityMatched,
-                $"{matchingAvailabilities.Count} agent(s) disponible(s) correspondent déjà à votre demande de signature.", entity.Id);
+                "Collègue disponible à cette date.", entity.Id);
         }
         Audit(entity.Id, "Created", requesterId, requesterId, null, new
         {
@@ -70,7 +70,7 @@ public sealed class SignatureGateway(PermutStibDbContext db) : ISignatureGateway
         var offer = new SignatureOfferRecord { Id = Guid.NewGuid(), RequestId = request.Id, Request = request, SignerId = signerId, AvailabilityId = null };
         db.SignatureOffers.Add(offer);
         request.Status = SignatureStatus.ProposalReceived;
-        Notify(request.RequesterId, NotificationType.SignatureOfferReceived, "Un agent se propose pour signer à votre place.", request.Id);
+        Notify(request.RequesterId, NotificationType.SignatureOfferReceived, "Un collègue propose de signer.", request.Id);
         Audit(request.Id, "SignerOffered", signerId, request.RequesterId, null,
             new { offer.Id, offer.RequestId, offer.SignerId, offer.Status, offer.CreatedAt });
         await db.SaveChangesAsync(cancellationToken);
@@ -107,7 +107,7 @@ public sealed class SignatureGateway(PermutStibDbContext db) : ISignatureGateway
             if (competing.Request.SignerId is null && competing.Request.Offers.All(x => x.Id == competing.Id || x.Status != SignatureOfferStatus.Pending))
                 competing.Request.Status = SignatureStatus.Open;
         }
-        Notify(offer.SignerId, NotificationType.SignatureOfferAccepted, "Vous avez été choisi comme signataire. L'engagement est désormais verrouillé.", request.Id);
+        Notify(offer.SignerId, NotificationType.SignatureOfferAccepted, "Vous êtes choisi comme signataire.", request.Id);
         Audit(request.Id, "Locked", requesterId, offer.SignerId, null, new { request.SignerId, request.LockedAt });
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -160,9 +160,9 @@ public sealed class SignatureGateway(PermutStibDbContext db) : ISignatureGateway
             });
             request.Status = SignatureStatus.ProposalReceived;
             Notify(request.RequesterId, NotificationType.SignatureAvailabilityMatched,
-                "Un agent disponible correspond à votre demande de signature.", request.Id);
+                "Collègue disponible à cette date.", request.Id);
             Notify(agentId, NotificationType.SignatureRequestMatched,
-                "Une demande de signature correspond à la disponibilité que vous venez de proposer.", request.Id);
+                "Demande correspondant à votre disponibilité.", request.Id);
         }
 
         AuditAvailability(entity.Id, "Created", agentId, null, entity);

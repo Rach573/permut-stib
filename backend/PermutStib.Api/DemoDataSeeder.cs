@@ -22,6 +22,7 @@ public static class DemoDataSeeder
         {
             await ResetDemoPasswordsAsync(users);
             await EnsureDemoSignatureAvailabilitiesAsync(db);
+            await RepairDemoNotificationTargetsAsync(db);
             await PrintCountsAsync(db);
             return;
         }
@@ -112,6 +113,7 @@ public static class DemoDataSeeder
 
         await EnsureDemoSignatureAvailabilitiesAsync(db);
         await db.SaveChangesAsync();
+        await RepairDemoNotificationTargetsAsync(db);
         await PrintCountsAsync(db);
     }
 
@@ -161,6 +163,50 @@ public static class DemoDataSeeder
                 Id = Guid.NewGuid(), AgentId = agent.Id, ServiceDate = serviceDate,
                 Comment = "Disponible pour aider un collègue — démonstration", IsActive = true
             });
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task RepairDemoNotificationTargetsAsync(PermutStibDbContext db)
+    {
+        var danglingNotifications = await db.Notifications
+            .Where(notification => notification.EntityType == "Signature" &&
+                !db.Signatures.Any(signature => signature.Id == notification.EntityId) &&
+                db.Users.Any(user => user.Id == notification.RecipientId && user.Matricule.StartsWith("70-")))
+            .ToListAsync();
+
+        foreach (var notification in danglingNotifications)
+        {
+            var permutation = await db.Permutations
+                .Where(item => item.RequesterId == notification.RecipientId)
+                .OrderByDescending(item => item.CreatedAt)
+                .FirstOrDefaultAsync();
+            if (permutation is null) continue;
+
+            notification.Type = NotificationType.PermutationProposalReceived;
+            notification.Message = "Démonstration : consultez le suivi de votre permutation.";
+            notification.EntityType = "Permutation";
+            notification.EntityId = permutation.Id;
+        }
+
+        var demoNotifications = await db.Notifications
+            .Where(notification => db.Users.Any(user => user.Id == notification.RecipientId && user.Matricule.StartsWith("70-")))
+            .ToListAsync();
+        foreach (var notification in demoNotifications)
+        {
+            notification.Message = notification.Type switch
+            {
+                NotificationType.PermutationProposalReceived => "Nouvelle proposition de permutation.",
+                NotificationType.PermutationProposalAccepted => "Proposition acceptée : confirmez l’échange.",
+                NotificationType.PermutationConfirmed => "Le collègue a confirmé. À votre tour.",
+                NotificationType.PermutationLocked => "Permutation confirmée.",
+                NotificationType.SignatureOfferReceived => "Un collègue propose de signer.",
+                NotificationType.SignatureOfferAccepted => "Vous êtes choisi comme signataire.",
+                NotificationType.SignatureAvailabilityMatched => "Collègue disponible à cette date.",
+                NotificationType.SignatureRequestMatched => "Demande correspondant à votre disponibilité.",
+                _ => notification.Message
+            };
         }
 
         await db.SaveChangesAsync();
